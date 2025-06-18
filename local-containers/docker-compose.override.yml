@@ -84,4 +84,6 @@ services:
       ## Development Environment Optimizations
       SITECORE_DEVELOPMENT_PATCHES: DevEnvOn,CustomErrorsOff,DebugOn,DiagnosticsOff,InitMessagesOff
       Sitecore_AppSettings_exmEnabled:define: "no" # remove to turn on EXM
+      Sitecore_ConnectionStrings_Old: Data Source=${SQL_SERVER};Initial Catalog=${SQL_DATABASE_PREFIX}.Old;User ID=${SQL_SA_LOGIN};Password=${SQL_SA_PASSWORD}
+      Sitecore_ConnectionStrings_CoreOld: Data Source=${SQL_SERVER};Initial Catalog=${SQL_DATABASE_PREFIX}.CoreOld;User ID=${SQL_SA_LOGIN};Password=${SQL_SA_PASSWORD}
     entrypoint: powershell -Command "& C:/tools/entrypoints/iis/XmCloudDevelopment.ps1"
