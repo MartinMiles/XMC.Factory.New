@@ -2,28 +2,28 @@
 .SYNOPSIS
   Parse Sitecore debug comments into a JSON hierarchy,
   with single-slash breadcrumbs for nested placeholders,
-  proper placeholder keys, no duplicate UIDs,
+  proper placeholder keys (UID+path), no duplicate UIDs,
   collapsing consecutive slashes, and stripping leading
   slashes from top-level placeholders.
 
 .PARAMETER Url
-  Defaults to http://rssbplatform.dev.local/about-habitat
+  Defaults to http://rssbplatform.dev.local/more-info
 
 .PARAMETER OutputPath
   Optional; if omitted, writes JSON to console.
 #>
 param(
-  [string]$Url        = 'http://rssbplatform.dev.local/more-info',
+  [string]$Url,
   [string]$OutputPath
 )
 
 # 1) Download HTML
 try {
   Write-Output "Downloading HTML from $Url"
-  $req     = [System.Net.HttpWebRequest]::Create($Url)
+  $req         = [System.Net.HttpWebRequest]::Create($Url)
   $req.Timeout = 10000
-  $res     = $req.GetResponse()
-  $content = (New-Object System.IO.StreamReader($res.GetResponseStream())).ReadToEnd()
+  $res         = $req.GetResponse()
+  $content     = (New-Object System.IO.StreamReader($res.GetResponseStream())).ReadToEnd()
   $res.Close()
 }
 catch {
@@ -50,106 +50,89 @@ function Convert-ComponentStringToObject {
   catch { throw "Invalid metadata JSON: $str" }
 }
 
-# 4) Initialize
+# 4) Initialize parsing state
 $rootUid         = '00000000-0000-0000-0000-000000000000'
 $rootPlaceholder = ''
 $rootName        = 'Default'
-$stack           = @()
-$ignoreUids      = @()
 $root            = $null
+
+# Dummy container to root the tree
+$container = [PSCustomObject]@{ placeholders = @{}; key = 'container' }
+$current   = $container
+$stack     = New-Object System.Collections.Stack
+$ignoreKeys = @()
 
 # 5) Build the tree
 foreach ($m in $matches) {
   $type = $m.Groups[1].Value
   $meta = Convert-ComponentStringToObject $m.Groups['json'].Value
+  $origPh = ($meta.placeholder -split '/')[ -1 ]
 
-  # Placeholder-array key = last segment of raw placeholder
-  $rawPh  = $meta.placeholder
-  $origPh = ($rawPh -split '/')[ -1 ]
-
-  $isRoot = (
-    $meta.uid         -eq $rootUid         -and
-    $meta.placeholder -eq $rootPlaceholder -and
-    $meta.name        -eq $rootName
-  )
+  # composite key of UID and path
+  $key = "$($meta.uid)|$($meta.path)"
 
   if ($type -eq 'start') {
-    # 5.a) Ignore if same UID as parent
-    if ($root -and $stack.Count -gt 0) {
-      $parent = $stack[-1]
-      if ($meta.uid -eq $parent.uid) {
-        $ignoreUids += $meta.uid
-        continue
-      }
+    # ignore if same component start nested
+    if ($key -eq $current.key) {
+      $ignoreKeys += $key
+      continue
     }
 
-    # 5.b) Create node
+    # create node with placeholders and key
     $node = [PSCustomObject]@{
       name         = $meta.name
       id           = $meta.id
       uid          = $meta.uid
       placeholder  = $origPh
       path         = $meta.path
-      placeholders = @{}
+      placeholders = @{ }
+      key          = $key
     }
 
-    if (-not $root) {
+    # capture root on its marker
+    if ($meta.uid -eq $rootUid -and $meta.placeholder -eq $rootPlaceholder -and $meta.name -eq $rootName) {
       $root = $node
     }
-    else {
-      $parent = $stack[-1]
 
-      # 5.c) Drop duplicates by UID in same array
-      if ($parent.placeholders.ContainsKey($origPh) -and
-          ($parent.placeholders[$origPh] | Where-Object { $_.uid -eq $meta.uid })) {
-        continue
-      }
-
-      # 5.d) Add node under origPh
-      if (-not $parent.placeholders.ContainsKey($origPh)) {
-        $parent.placeholders[$origPh] = @()
-      }
-      $parent.placeholders[$origPh] += $node
-
-      # 5.e) If depth ≥2, build single-slash breadcrumb
-      if ($stack.Count -gt 1) {
-        $labels = @()
-        for ($i = 1; $i -lt $stack.Count; $i++) {
-          $labels += ($stack[$i].placeholder -split '/')[ -1 ]
-        }
-        $labels += $origPh
-        $node.placeholder = '/' + ($labels -join '/')
-      }
+    # attach under current
+    if (-not $current.placeholders.ContainsKey($origPh)) {
+      $current.placeholders[$origPh] = @()
     }
+    $current.placeholders[$origPh] += $node
 
-    # 5.f) Push node
-    $stack += $node
+    # push current and descend
+    $stack.Push($current)
+    $current = $node
   }
   else {
     # end-component
 
-    # 5.g) Drop ignored‐UID
-    if ($ignoreUids -contains $meta.uid) {
-      $ignoreUids = $ignoreUids | Where-Object { $_ -ne $meta.uid }
+    # skip ignored
+    if ($ignoreKeys -contains $key) {
+      $ignoreKeys = $ignoreKeys | Where-Object { $_ -ne $key }
       continue
     }
-    if ($isRoot) { continue }
 
-    # Pop LIFO
-    if ($stack.Count -gt 0) {
-      $stack = $stack[0..($stack.Count - 2)]
+    # only pop when key matches
+    if ($key -eq $current.key) {
+      if ($stack.Count -gt 0) {
+        $current = $stack.Pop()
+      }
+      else {
+        throw "No parent on stack for component end: $($meta.name) [$key]"
+      }
     }
-    else {
-      throw "Found an end-component with no open start-component."
-    }
+    # else unmatched end, skip
   }
 }
 
-# 6) Validate
-if ($stack.Count -gt 1) {
+# 6) Validate none remain
+if ($stack.Count -ne 0) {
   Write-Error "Unmatched components remain:"
-  $stack[0..($stack.Count - 2)] |
-    ForEach-Object { Write-Error " - $($_.name) [UID: $($_.uid)]" }
+  while ($stack.Count -gt 0) {
+    $n = $stack.Pop()
+    Write-Error " - $($n.name) [$($n.key)]"
+  }
   exit 1
 }
 if (-not $root) {
@@ -159,9 +142,7 @@ if (-not $root) {
 
 # 7) Emit JSON and clean up slashes
 $json = $root | ConvertTo-Json -Depth 20
-# 7.a) Collapse any run of 2+ forward-slashes into a single '/'
 $json = $json -replace '/{2,}', '/'
-# 7.b) Remove a single leading slash for placeholder values that have no other slash
 $json = $json -replace '"placeholder":"/([^/"]+)"', '"placeholder":"$1"'
 
 if ($OutputPath) {
