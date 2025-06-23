@@ -1,17 +1,3 @@
-<#
-.SYNOPSIS
-  Parse Sitecore debug comments into a JSON hierarchy,
-  with single-slash breadcrumbs for nested placeholders,
-  proper placeholder keys (UID+path), no duplicate UIDs,
-  collapsing consecutive slashes, and stripping leading
-  slashes from top-level placeholders.
-
-.PARAMETER Url
-  Defaults to http://rssbplatform.dev.local/more-info
-
-.PARAMETER OutputPath
-  Optional, if omitted, writes JSON to console
-#>
 param(
   [string]$Url,
   [string]$OutputPath
@@ -19,11 +5,11 @@ param(
 
 # 1) Download HTML
 try {
-  Write-Output "Downloading HTML from $Url"
-  $req         = [System.Net.HttpWebRequest]::Create($Url)
-  $req.Timeout = 10000
-  $res         = $req.GetResponse()
-  $content     = (New-Object System.IO.StreamReader($res.GetResponseStream())).ReadToEnd()
+  $req            = [System.Net.WebRequest]::Create($Url)
+  $req.Method     = 'GET'
+  $req.Timeout    = 10000
+  $res            = $req.GetResponse()
+  $content        = (New-Object System.IO.StreamReader($res.GetResponseStream())).ReadToEnd()
   $res.Close()
 }
 catch {
@@ -54,6 +40,11 @@ function Convert-ComponentStringToObject {
 $rootUid         = '00000000-0000-0000-0000-000000000000'
 $rootPlaceholder = ''
 $rootName        = 'Default'
+$placeholderMappings = @{
+    "page-layout" = "headless-main"
+    "header-top"  = "headless-header"
+    "footer"      = "headless-footer"
+}
 $root            = $null
 
 # Dummy container to root the tree
@@ -74,11 +65,30 @@ foreach ($m in $matches) {
       $ignoreKeys += $key
       continue
     }
+    # Compute xmc property
+    if ($meta.uid -eq $rootUid) {
+      $xmcValue = ""
+    }
+    elseif ($current.uid -eq $rootUid) {
+      $mappingKey = $origPh.ToLower()
+      if ($placeholderMappings.ContainsKey($mappingKey)) {
+        $xmcValue = $placeholderMappings[$mappingKey]
+      }
+      else {
+        $xmcValue = $origPh
+      }
+    }
+    else {
+      $parentXmc = $current.xmc.TrimStart('/')
+      $xmcValue   = "/$parentXmc/$origPh"
+    }
+
     $node = [PSCustomObject]@{
       name         = $meta.name
       id           = $meta.id
       uid          = $meta.uid
       placeholder  = $origPh
+      xmc          = $xmcValue
       path         = $meta.path
       key          = $key
       placeholders = @{ }
@@ -88,11 +98,12 @@ foreach ($m in $matches) {
       $root = $node
     }
 
-    if (-not $current.placeholders.ContainsKey($origPh)) {
-      $current.placeholders[$origPh] = @()
+    if ($current.placeholders.ContainsKey($origPh)) {
+      $current.placeholders[$origPh] += $node
     }
-    $current.placeholders[$origPh] += $node
-
+    else {
+      $current.placeholders[$origPh] = @($node)
+    }
     $stack.Push($current)
     $current = $node
   }
@@ -126,21 +137,8 @@ if (-not $root) {
   exit 1
 }
 
-# 7) Emit JSON, fix slashes, trim whitespace, collapse blank lines
-$json = $root | ConvertTo-Json -Depth 20
-
-# collapse consecutive slashes
-$json = $json -replace '/{2,}', '/'
-
-# strip leading slash from placeholder values
-$json = $json -replace '"placeholder":"/([^/"]+)"', '"placeholder":"$1"'
-
-# trim trailing whitespace on each line
-$json = (
-  $json -split '\r?\n' |
-  ForEach-Object { $_.TrimEnd() }
-) -join "`n"
-
+# 7) Output JSON
+$json = ($root | ConvertTo-Json -Depth 100 | ForEach-Object { $_.TrimEnd() }) -join "`n"
 # collapse multiple blank lines into one
 $json = $json -replace "(`n){2,}", "`n"
 
