@@ -10,7 +10,7 @@
   Defaults to http://rssbplatform.dev.local/more-info
 
 .PARAMETER OutputPath
-  Optional; if omitted, writes JSON to console.
+  Optional, if omitted, writes JSON to console
 #>
 param(
   [string]$Url,
@@ -57,63 +57,50 @@ $rootName        = 'Default'
 $root            = $null
 
 # Dummy container to root the tree
-$container = [PSCustomObject]@{ placeholders = @{}; key = 'container' }
-$current   = $container
-$stack     = New-Object System.Collections.Stack
+$container  = [PSCustomObject]@{ placeholders = @{}; key = 'container' }
+$current    = $container
+$stack      = New-Object System.Collections.Stack
 $ignoreKeys = @()
 
 # 5) Build the tree
 foreach ($m in $matches) {
-  $type = $m.Groups[1].Value
-  $meta = Convert-ComponentStringToObject $m.Groups['json'].Value
+  $type   = $m.Groups[1].Value
+  $meta   = Convert-ComponentStringToObject $m.Groups['json'].Value
   $origPh = ($meta.placeholder -split '/')[ -1 ]
-
-  # composite key of UID and path
-  $key = "$($meta.uid)|$($meta.path)"
+  $key    = "$($meta.uid)|$($meta.path)"
 
   if ($type -eq 'start') {
-    # ignore if same component start nested
     if ($key -eq $current.key) {
       $ignoreKeys += $key
       continue
     }
-
-    # create node with placeholders and key
     $node = [PSCustomObject]@{
       name         = $meta.name
       id           = $meta.id
       uid          = $meta.uid
       placeholder  = $origPh
       path         = $meta.path
-      placeholders = @{ }
       key          = $key
+      placeholders = @{ }
     }
 
-    # capture root on its marker
     if ($meta.uid -eq $rootUid -and $meta.placeholder -eq $rootPlaceholder -and $meta.name -eq $rootName) {
       $root = $node
     }
 
-    # attach under current
     if (-not $current.placeholders.ContainsKey($origPh)) {
       $current.placeholders[$origPh] = @()
     }
     $current.placeholders[$origPh] += $node
 
-    # push current and descend
     $stack.Push($current)
     $current = $node
   }
   else {
-    # end-component
-
-    # skip ignored
     if ($ignoreKeys -contains $key) {
       $ignoreKeys = $ignoreKeys | Where-Object { $_ -ne $key }
       continue
     }
-
-    # only pop when key matches
     if ($key -eq $current.key) {
       if ($stack.Count -gt 0) {
         $current = $stack.Pop()
@@ -122,7 +109,6 @@ foreach ($m in $matches) {
         throw "No parent on stack for component end: $($meta.name) [$key]"
       }
     }
-    # else unmatched end, skip
   }
 }
 
@@ -140,13 +126,27 @@ if (-not $root) {
   exit 1
 }
 
-# 7) Emit JSON and clean up slashes
+# 7) Emit JSON, fix slashes, trim whitespace, collapse blank lines
 $json = $root | ConvertTo-Json -Depth 20
+
+# collapse consecutive slashes
 $json = $json -replace '/{2,}', '/'
+
+# strip leading slash from placeholder values
 $json = $json -replace '"placeholder":"/([^/"]+)"', '"placeholder":"$1"'
 
+# trim trailing whitespace on each line
+$json = (
+  $json -split '\r?\n' |
+  ForEach-Object { $_.TrimEnd() }
+) -join "`n"
+
+# collapse multiple blank lines into one
+$json = $json -replace "(`n){2,}", "`n"
+
 if ($OutputPath) {
-  $json | Out-File $OutputPath -Encoding UTF8
+  # write UTF8 without BOM so editors see pure LF
+  $json | Out-File $OutputPath -Encoding utf8
   Write-Output "JSON written to $OutputPath"
 }
 else {
