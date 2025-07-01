@@ -5,11 +5,11 @@ param(
 
 # 1) Download HTML
 try {
-  $req            = [System.Net.WebRequest]::Create($Url)
-  $req.Method     = 'GET'
-  $req.Timeout    = 10000
-  $res            = $req.GetResponse()
-  $content        = (New-Object System.IO.StreamReader($res.GetResponseStream())).ReadToEnd()
+  $req     = [System.Net.WebRequest]::Create($Url)
+  $req.Method  = 'GET'
+  $req.Timeout = 10000
+  $res     = $req.GetResponse()
+  $content = (New-Object System.IO.StreamReader($res.GetResponseStream())).ReadToEnd()
   $res.Close()
 }
 catch {
@@ -20,7 +20,8 @@ catch {
 # 2) Extract component markers
 $pattern = "<!--\s*(start|end)-component='(?<json>[^']+)'\s*-->"
 $matches = [regex]::Matches(
-  $content, $pattern,
+  $content,
+  $pattern,
   [System.Text.RegularExpressions.RegexOptions]::Singleline
 )
 if ($matches.Count -eq 0) {
@@ -37,18 +38,22 @@ function Convert-ComponentStringToObject {
 }
 
 # 4) Initialize parsing state
-$rootUid         = '00000000-0000-0000-0000-000000000000'
-$rootPlaceholder = ''
-$rootName        = 'Default'
+$rootUid            = '00000000-0000-0000-0000-000000000000'
+$rootPlaceholder    = ''
+$rootName           = 'Default'
 $placeholderMappings = @{
-    "page-layout" = "headless-main"
-    "header-top"  = "headless-header"
-    "footer"      = "headless-footer"
+  'page-layout' = 'headless-main'
+  'header-top'  = 'headless-header'
+  'footer'      = 'headless-footer'
 }
-$root            = $null
+$root               = $null
 
-# Dummy container to root the tree
-$container  = [PSCustomObject]@{ placeholders = @{}; key = 'container' }
+# Dummy container to root the tree (now seeded with uid)
+$container = [PSCustomObject]@{
+  placeholders = @{}
+  key          = 'container'
+  uid          = $rootUid
+}
 $current    = $container
 $stack      = New-Object System.Collections.Stack
 $ignoreKeys = @()
@@ -65,9 +70,14 @@ foreach ($m in $matches) {
       $ignoreKeys += $key
       continue
     }
-    # Compute xmc property
+
+    # Compute xmc property exactly as before
     if ($meta.uid -eq $rootUid) {
-      $xmcValue = ""
+      $xmcValue = ''
+    }
+    elseif ($meta.uid -eq $current.uid) {
+      # Duplicate nesting
+      $xmcValue = $current.xmc
     }
     elseif ($current.uid -eq $rootUid) {
       $mappingKey = $origPh.ToLower()
@@ -80,13 +90,20 @@ foreach ($m in $matches) {
     }
     else {
       $parentXmc = $current.xmc.TrimStart('/')
-      $xmcValue   = "/$parentXmc/$origPh"
+      $segments  = $parentXmc -split '/'
+      if ($placeholderMappings.ContainsKey($segments[0].ToLower())) {
+        $segments[0] = $placeholderMappings[$segments[0].ToLower()]
+      }
+      $joined    = ($segments + $origPh) -join '/'
+      $xmcValue  = "/$joined"
     }
 
+    # --- NEW: add parent property here ---
     $node = [PSCustomObject]@{
       name         = $meta.name
       id           = $meta.id
       uid          = $meta.uid
+      parent       = $current.uid
       placeholder  = $origPh
       xmc          = $xmcValue
       path         = $meta.path
@@ -94,36 +111,35 @@ foreach ($m in $matches) {
       placeholders = @{ }
     }
 
+    # capture the real root
     if ($meta.uid -eq $rootUid -and $meta.placeholder -eq $rootPlaceholder -and $meta.name -eq $rootName) {
       $root = $node
     }
 
+    # attach to current
     if ($current.placeholders.ContainsKey($origPh)) {
       $current.placeholders[$origPh] += $node
     }
     else {
       $current.placeholders[$origPh] = @($node)
     }
+
+    # descend
     $stack.Push($current)
     $current = $node
   }
   else {
-    if ($ignoreKeys -contains $key) {
-      $ignoreKeys = $ignoreKeys | Where-Object { $_ -ne $key }
-      continue
+    # on end-component
+    if ($stack.Count -gt 0) {
+      $current = $stack.Pop()
     }
-    if ($key -eq $current.key) {
-      if ($stack.Count -gt 0) {
-        $current = $stack.Pop()
-      }
-      else {
-        throw "No parent on stack for component end: $($meta.name) [$key]"
-      }
+    else {
+      throw "No parent on stack for component end: $($meta.name) [$key]"
     }
   }
 }
 
-# 6) Validate none remain
+# 6) Validate no unmatched components remain
 if ($stack.Count -ne 0) {
   Write-Error "Unmatched components remain:"
   while ($stack.Count -gt 0) {
@@ -143,7 +159,6 @@ $json = ($root | ConvertTo-Json -Depth 100 | ForEach-Object { $_.TrimEnd() }) -j
 $json = $json -replace "(`n){2,}", "`n"
 
 if ($OutputPath) {
-  # write UTF8 without BOM so editors see pure LF
   $json | Out-File $OutputPath -Encoding utf8
   Write-Output "JSON written to $OutputPath"
 }
