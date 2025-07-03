@@ -65,6 +65,8 @@ foreach ($m in $matches) {
   $origPh = ($meta.placeholder -split '/')[ -1 ]
   $key    = "$($meta.uid)|$($meta.path)"
 
+  $origPh = $origPh -replace '-\{[0-9a-fA-F-]{8}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{12}\}-\d+$', ''
+
   if ($type -eq 'start') {
     if ($key -eq $current.key) {
       $ignoreKeys += $key
