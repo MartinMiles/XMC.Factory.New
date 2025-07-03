@@ -23,7 +23,7 @@ $session = New-ScriptSession `
     -SharedSecret  $config.SPE_REMOTING_SECRET
 
 # 3) Invoke conversion on CM, echo back every line
-try {
+
     $output = Invoke-RemoteScript `
         -Session     $session `
         -Raw         `
@@ -31,110 +31,195 @@ try {
         -Verbose     `
         -ScriptBlock {
 
-            function Throw-ParseError { param($m) Write-Error $m; throw $m }
+            # function Throw-ParseError { param($m) Write-Error $m; throw $m }
 
-            function Get-LayoutXml {
-                param([Sitecore.Data.Items.Item]$itm)
-                $fld = $itm.Fields['__Renderings']
-                if (-not $fld)   { Throw-ParseError "Missing __Renderings on '$($itm.Paths.FullPath)'" }
-                try   { [Sitecore.Layouts.LayoutDefinition]::Parse($fld.Value) }
-                catch { Throw-ParseError "Bad XML on '$($itm.Paths.FullPath)': $_" }
-            }
 
-            function Build-QueryString {
-                param([Hashtable]$h)
-                $sb = [System.Text.StringBuilder]::new()
-                foreach ($k in $h.Keys) { [void]$sb.Append("$k=$($h[$k])&") }
-                return $sb.ToString().TrimEnd('&')
-            }
 
-            try {
-                Write-Output "=== BEGIN conversion ==="
+  [bool]  $processStandardValues = $true
+  [bool]  $processPageLayout     = $true
 
-                Add-Type -AssemblyName 'Newtonsoft.Json' -ErrorAction Stop
-                $root  = [Newtonsoft.Json.Linq.JToken]::Parse($using:jsonText)
-                $nodes = $root.SelectTokens('$..[?(@.uid && @.placeholder)]')
-                [int]$count = ($nodes | Measure-Object).Count
-                Write-Output "Parsed JSON, $count nodes"
 
-                $nodeMap = @{}; $phMap = @{}
-                foreach ($n in $nodes) {
-                    $u = $n.uid.ToString().Trim('{}').ToLowerInvariant()
-                    $p = $n.placeholder.ToString().Trim('/')
-                    $nodeMap[$u] = $n; $phMap[$p] = $u
-                }
+Add-Type -AssemblyName "Newtonsoft.Json"
+Add-Type -AssemblyName "System.Xml.Linq"
 
-                $item    = Get-Item -Path $using:itemPath -ErrorAction Stop
-                $stdVals = $item.Template.StandardValues
-                $stdLd   = Get-LayoutXml $stdVals
-                $pgLd    = Get-LayoutXml $item
+# initialize mappings
+$uid2dyn = @{}
+$ph2dyn  = @{}
 
-                $devId   = '{FE5D7FDF-89C0-4D99-9AA3-B5FBD009C9F3}'
-                $stdDev  = $stdLd.GetDevice($devId);  if (-not $stdDev) { Throw-ParseError "Std-values missing device" }
-                $pgDev   = $pgLd.GetDevice($devId);   if (-not $pgDev)  { Throw-ParseError "Page missing device" }
+function SetField($item, $fieldId, $value) {
+  if (-not $item.Editing.IsEditing) { $item.Editing.BeginEdit() }
+  $item.Fields[$fieldId].Value = $value
+  $item.Editing.EndEdit()
+}
 
-                $all = @(); $orig=@{}; $dyn=@{}; [int]$i = 1
-                foreach ($r in $stdDev.Renderings + $pgDev.Renderings) {
-                    if ($r) {
-                        $u = $r.UniqueId.ToString().Trim('{}').ToLowerInvariant()
-                        $all += $r
-                        $orig[$u] = if ($stdDev.Renderings -contains $r) {'std'} else {'page'}
-                        $dyn[$u]  = $i
-                        Write-Output "DPID=$i → $u"
-                        $i++
-                    }
-                }
+function GetLocalAttr($elem, $name) {
+  $elem.Attributes() | Where-Object { $_.Name.LocalName -eq $name }
+}
 
-                function Resolve-Placeholder {
-                    param([Sitecore.Layouts.RenderingDefinition]$r)
-                    $u = $r.UniqueId.ToString().Trim('{}').ToLowerInvariant()
-                    if (-not $nodeMap.ContainsKey($u)) { Throw-ParseError "UID $u missing JSON" }
-                    $parts = $nodeMap[$u].placeholder.ToString().Trim('/').Split('/')
-                    $out   = [System.Collections.Generic.List[string]]::new(); $out.Add($parts[0])
-                    for ($j=1; $j -lt $parts.Length; $j++) {
-                        $pref = ($parts[0..($j-1)] -join '/')
-                        if (-not $phMap.ContainsKey($pref)) { Throw-ParseError "Prefix '$pref' missing" }
-                        $pr  = $phMap[$pref]
-                        $out.Add("$($parts[$j])-0-$($dyn[$pr])")
-                    }
-                    return '/' + ($out -join '/')
-                }
+function SetLocalAttr($elem, $name, $value) {
+  $a = GetLocalAttr $elem $name
+  if ($a.Count) { $a[0].Value = $value } else { $elem.SetAttributeValue($name, $value) }
+}
 
-                foreach ($r in $all) {
-                    $u    = $r.UniqueId.ToString().Trim('{}').ToLowerInvariant()
-                    $h    = [ordered]@{}
-                    if ($r.Parameters) {
-                        $qp = [Sitecore.Web.WebUtil]::ParseUrlParameters("?" + $r.Parameters)
-                        foreach ($k in $qp.AllKeys) { $h[$k] = $qp[$k] }
-                    }
-                    $h['DynamicPlaceholderId'] = $dyn[$u]
-                    $r.Parameters               = Build-QueryString $h
+# 1) Load JSON maps
+# $jsonPath = [System.Web.Hosting.HostingEnvironment]::MapPath("~/App_Data/about.json")
+# if (-not (Test-Path $jsonPath)) { Throw "more.json not found: $jsonPath" }
+$jsonRoot = [Newtonsoft.Json.Linq.JToken]::Parse($Using:jsonText)
+$all      = New-Object 'System.Collections.Generic.List[Newtonsoft.Json.Linq.JObject]'
+function Rec([Newtonsoft.Json.Linq.JToken]$n) {
+  if ($n -is [Newtonsoft.Json.Linq.JObject]) { $all.Add($n) }
+  foreach ($c in $n.Children()) { Rec $c }
+}
+Rec $jsonRoot
 
-                    $old = $r.Placeholder
-                    $new = Resolve-Placeholder $r
-                    $r.Placeholder = $new
-                    Write-Output "$($u): $old → $new"
-                }
+$map       = @{}
+$parentMap = @{}
+$zeroGuid  = '00000000-0000-0000-0000-000000000000'
 
-                [void]$stdVals.Editing.BeginEdit()
-                $stdVals.Fields['__Renderings'].Value = $stdLd.ToXml()
-                [void]$stdVals.Editing.EndEdit()
-                [void]$item.Editing.BeginEdit()
-                $item.Fields['__Renderings'].Value   = $pgLd.ToXml()
-                [void]$item.Editing.EndEdit()
+foreach ($o in $all) {
+  if ($o.ContainsKey('uid') -and $o.ContainsKey('xmc')) {
+    $u = $o['uid'].ToString().Trim('{}').ToLowerInvariant()
+    $x = $o['xmc'].ToString()
+    if ($u -and $x) { $map[$u] = $x }
+  }
+  if ($o.ContainsKey('uid') -and $o.ContainsKey('parent')) {
+    $u = $o['uid'].ToString().Trim('{}').ToLowerInvariant()
+    $p = $o['parent'].ToString().Trim('{}').ToLowerInvariant()
+    if ($p -ne $u -and $p -ne $zeroGuid) { $parentMap[$u] = $p }
+  }
+}
+Write-Host "Loaded mappings: uid>xmc=$($map.Count), parentMap=$($parentMap.Count)"
 
-                Write-Output "=== END conversion ==="
-            }
-            catch {
-                Write-Output "REMOTE EXCEPTION: $($_.Exception.Message)"
-                Write-Output $_.Exception.StackTrace
-            }
+# 2) Merge shared + final (unchanged)
+function MergeXml([string]$sharedXml, [string]$finalXml) {
+  $master = [System.Xml.Linq.XDocument]::Parse($sharedXml)
+  if (-not [string]::IsNullOrWhiteSpace($finalXml)) {
+    $frag = [System.Xml.Linq.XDocument]::Parse($finalXml)
+    foreach ($el in $frag.Root.Elements()) { $master.Root.Add($el) }
+  }
+  return $master.ToString()
+}
+
+# 3) Process layout XML nodes with new placeholder logic
+$counter = 1
+function ProcessFull($xml) {
+  $doc           = [System.Xml.Linq.XDocument]::Parse($xml)
+  $cloud         = '{C530C0D6-E215-4CE5-B0EC-90F6D636AF6A}'
+  $processedUids = @{}
+  $uid2ph        = @{}    # New: map each uid to its final placeholder
+
+  foreach ($d in $doc.Root.Elements() | Where-Object { $_.Name.LocalName -eq 'd' }) {
+    $d.SetAttributeValue('l', $cloud)
+    foreach ($r in $d.Elements() | Where-Object { $_.Name.LocalName -eq 'r' }) {
+      $aU  = $r.Attribute('uid')
+      $key = if ($aU) { $aU.Value.Trim('{}').ToLowerInvariant() } else { $null }
+
+      if ($key -and $processedUids.ContainsKey($key)) {
+        $r.Remove(); continue
+      }
+
+      if ($key -and -not $uid2dyn.ContainsKey($key)) {
+        $uid2dyn[$key] = $counter; $counter++
+      }
+      $dyn = if ($key) { $uid2dyn[$key] } else { $counter; $counter++ }
+      if ($key) { $processedUids[$key] = $true }
+
+      # base placeholder from JSON xmc or existing attribute
+      if ($key -and $map.ContainsKey($key)) { $basePh = $map[$key] }
+      else {
+        $oPh    = GetLocalAttr $r 'ph'
+        $basePh = if ($oPh.Count) { $oPh[0].Value } else { '' }
+      }
+
+      # determine parent key + dyn
+      if ($key -and $parentMap.ContainsKey($key)) {
+        $parentKey = $parentMap[$key]
+        $parentDyn = if ($uid2dyn.ContainsKey($parentKey)) { $uid2dyn[$parentKey] } else { $null }
+      } else {
+        $parentKey = $null; $parentDyn = $null
+      }
+
+      # New logic, leaf + prefix
+      $leaf = $basePh.TrimEnd('/').Split('/')[-1]
+      if ($parentDyn) {
+        if ($uid2ph.ContainsKey($parentKey)) {
+          $parentFinalPh = $uid2ph[$parentKey]
+        } else {
+          $baseParentPath = [System.IO.Path]::GetDirectoryName($basePh).Replace('\','/')
+          $parentFinalPh  = if ($baseParentPath.StartsWith("/")) { $baseParentPath } else { "/$baseParentPath" }
+        }
+        $prefix  = if ($parentFinalPh.StartsWith("/")) { $parentFinalPh } else { "/$parentFinalPh" }
+        $finalPh = "$prefix/$leaf-0-$parentDyn"
+      } else {
+        $finalPh = "$leaf"
+      }
+
+      # record for deeper levels
+      if ($key) { $uid2ph[$key] = $finalPh }
+
+      # map placeholder to its own dyn
+      $ph2dyn[$finalPh] = $dyn
+
+      # rebuild parameters (unchanged)
+      $oPr    = GetLocalAttr $r 'par'
+      $old    = if ($oPr.Count) { $oPr[0].Value } else { '' }
+      $parts  = if ($old) { $old.Split('&') } else { @() }
+      $clean  = $parts | Where-Object { $_ -and -not $_.StartsWith('DynamicPlaceholderId=') } | Select-Object -Unique
+      $cs     = ($clean -join '&').Trim('&')
+      $newPar = if ($cs) { "DynamicPlaceholderId=$dyn&$cs" } else { "DynamicPlaceholderId=$dyn" }
+      SetLocalAttr $r 'par' $newPar
+      Write-Host "  Set par='$newPar' for uid='$key'"
+
+      # set placeholder attribute
+      SetLocalAttr $r 'ph' $finalPh
+      Write-Host "  Set ph ='$finalPh' for uid='$key'"
+    }
+  }
+  return $doc.ToString()
+}
+
+# 4) preserve root attributes (unchanged)
+function PreserveRootAttrs($processedXml, $originalXml) {
+  if ([string]::IsNullOrWhiteSpace($originalXml)) { return $processedXml }
+  $orig = [System.Xml.Linq.XDocument]::Parse($originalXml)
+  $new  = [System.Xml.Linq.XDocument]::Parse($processedXml)
+  foreach ($a in $orig.Root.Attributes()) { $new.Root.SetAttributeValue($a.Name, $a.Value) }
+  return $new.ToString()
+}
+
+# 5) apply to Sitecore item (unchanged)
+Write-Host "Processing item: $Using:itemPath"
+$item = Get-Item -Path $Using:itemPath -ErrorAction Stop
+$ids  = [Sitecore.FieldIDs]
+
+if ($processStandardValues) {
+  $std     = $item.Template.StandardValues
+  $sharedS = ProcessFull $std.Fields[$ids::LayoutField].Value
+  SetField $std $ids::LayoutField $sharedS
+
+  $mergedS = MergeXml $sharedS $std.Fields[$ids::FinalLayoutField].Value
+  $procS   = ProcessFull $mergedS
+  $withRt  = PreserveRootAttrs $procS $std.Fields[$ids::FinalLayoutField].Value
+  SetField $std $ids::FinalLayoutField $withRt
+}
+
+if ($processPageLayout) {
+  $page    = ProcessFull $item.Fields[$ids::LayoutField].Value
+  SetField $item $ids::LayoutField $page
+
+  $mergedP = MergeXml $page $item.Fields[$ids::FinalLayoutField].Value
+  $procP   = ProcessFull $mergedP
+  $withRtP = PreserveRootAttrs $procP $item.Fields[$ids::FinalLayoutField].Value
+  SetField $item $ids::FinalLayoutField $withRtP
+}
+
+Write-Host "All done for $Using:itemPath"
+
+
+
+
+
         }
 
-    # echo remote logs
-    Write-Output "=== REMOTE OUTPUT ==="
-    $output | ForEach-Object { Write-Output $_ }
-}
-finally {
     Stop-ScriptSession -Session $session
-}
+
