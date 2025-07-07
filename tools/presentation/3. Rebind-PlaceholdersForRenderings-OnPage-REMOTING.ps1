@@ -1,5 +1,5 @@
 param(
-    [string]$PageItemPath = "/sitecore/content/Zont/Habitat/Home/more"
+    [string]$PageItemPath = "/sitecore/content/Zont/Habitat/Home/target"
 )
 
 Set-Location -Path $PSScriptRoot
