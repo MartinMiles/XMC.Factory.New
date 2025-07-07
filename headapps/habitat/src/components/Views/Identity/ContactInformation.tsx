@@ -1,37 +1,57 @@
-﻿import {
-  ComponentParams,
-  ComponentRendering,
-  Placeholder,
-} from '@sitecore-jss/sitecore-jss-nextjs';
+﻿import { Link, LinkFieldValue, Text } from '@sitecore-jss/sitecore-jss-nextjs';
 import React from 'react';
 
-interface ComponentProps {
-  rendering: ComponentRendering & { params: ComponentParams };
-  params: ComponentParams;
+interface Fields {
+  OrganisationName: { value: string };
+  OrganisationAddress: { value: string };
+  OrganisationPhone: { value: string };
+  OrganisationEmail: { value: LinkFieldValue };
 }
 
-const ContactInformation = (props: ComponentProps): JSX.Element => {
+type ContactInformationProps = {
+  params: { [key: string]: string };
+  fields: Fields;
+};
+
+function parseSitecoreLinkXmlToJssField(linkValue: string | LinkFieldValue) {
+  if (!linkValue) return null;
+  const textMatch = linkValue.match(/text='([^']*)'/);
+  const hrefMatch = linkValue.match(/url='([^']*)'/);
+  const titleMatch = linkValue.match(/title='([^']*)'/);
+  const linktypeMatch = linkValue.match(/linktype='([^']*)'/);
+
+  return {
+    value: {
+      href: hrefMatch ? hrefMatch[1] : '',
+      text: textMatch ? textMatch[1] : '',
+      title: titleMatch ? titleMatch[1] : '',
+      linktype: linktypeMatch ? linktypeMatch[1] : ''
+    }
+  };
+}
+
+const ContactInformation = (props: ContactInformationProps): JSX.Element => {
+
+  const parsedField = parseSitecoreLinkXmlToJssField(props.fields.OrganisationEmail.value);
+  if (!parsedField) return <></>;
+
   return (
     <>
-      <h3 style={{ color: 'red' }}>C0ntact Information</h3>
+      <h3 style={{ color: 'red' }}>Contact Information</h3>
       <div className="well ">
         <h4>Contact information</h4>
-
         <address>
           <p>
-            <strong>Sitecore Corporation</strong>
+            <strong>
+              <Text field={props.fields.OrganisationName} />
+            </strong>
             <br />
-            101 California Street <br />
-            Suite 1600 <br />
-            San Francisco, CA 94111
-            <br />
-            USA
+            <Text field={props.fields.OrganisationAddress} />
           </p>
           <p>
-            <br />
-            <i className="fa fa-phone"></i> +1 415 380 0600 <br />
-            <i className="fa fa-envelope"></i>{' '}
-            <a href="mailto:sales@sitecore.net">sales@sitecore.net</a>{' '}
+            <i className="fa fa-phone"></i> <Text field={props.fields.OrganisationPhone} /> <br />
+            <i className="fa fa-envelope"> </i>
+            <Link field={parsedField} className="your-class" />;
           </p>
         </address>
       </div>

@@ -12,7 +12,7 @@ interface ComponentProps {
 
 const SiteMenu = (props: ComponentProps): JSX.Element => {
   return <>
-      <h3>Site Menu</h3>
+      <h3 style={{ color: 'red' }}>Site Menu</h3>
     </>;
 };
 

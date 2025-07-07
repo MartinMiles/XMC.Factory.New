@@ -13,7 +13,11 @@ interface ComponentProps {
 const FourColumn2244 = (props: ComponentProps): JSX.Element => {
   return (
     <>
+      {/* <br /> */}
       <h3 style={{ color: 'red' }}>Four Column 2-2-4-4</h3>
+      {/* <br />
+      <h4 style={{ color: 'red' }}>{props.rendering.uid}</h4> */}
+
       <div className="container">
         <div className="row">
           <div className="col-md-2 col-sm-6">

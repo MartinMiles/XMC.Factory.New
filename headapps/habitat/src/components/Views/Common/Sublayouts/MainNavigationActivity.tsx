@@ -13,7 +13,7 @@ interface ComponentProps {
 const MainNavigationActivity = (props: ComponentProps): JSX.Element => {
   return (
     <>
-    <h3>Main Navigation Activity</h3>
+      <h3>Main Navigation Activity</h3>
       <div className="navbar-activity">
         <ul className="nav navbar-nav">
           <Placeholder name="navbar-activity" rendering={props.rendering} />

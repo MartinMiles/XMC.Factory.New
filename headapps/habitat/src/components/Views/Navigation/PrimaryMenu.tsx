@@ -13,7 +13,7 @@ interface ComponentProps {
 const PrimaryMenu = (props: ComponentProps): JSX.Element => {
   return (
     <>
-    <h3>Primary menu</h3>
+      <h3 style={{ color: 'red' }}>Primary menu</h3>
       <div className="collapse navbar-collapse" id="siteNavbar">
         <ul className="nav navbar-nav">
           <li className=" dropdown">
@@ -81,7 +81,7 @@ const PrimaryMenu = (props: ComponentProps): JSX.Element => {
           </li>
           <li className="">
             <a className="text-uppercase" href="http://habitat.dev.local/en/More-Info" target="">
-              More Info
+              More Info!
             </a>
           </li>
         </ul>

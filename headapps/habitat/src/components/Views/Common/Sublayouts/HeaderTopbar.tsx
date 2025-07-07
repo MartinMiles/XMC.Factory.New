@@ -13,7 +13,7 @@ interface ComponentProps {
 const HeaderTopbar = (props: ComponentProps): JSX.Element => {
   return (
     <>
-    <h2>Headless Topbar</h2>
+    <h3>Headless Topbar</h3>
       <div className="header-top">
         <div className="container">
           <div className="row">

@@ -15,7 +15,6 @@ const Footer = (props: ComponentProps): JSX.Element => {
     <>
       <h3 style={{ color: 'red' }}>Footer</h3>
       <Placeholder name="section" rendering={props.rendering} />
-
       <div className="footer-bottom text-center">
         <div className="container">
           <div className="row">

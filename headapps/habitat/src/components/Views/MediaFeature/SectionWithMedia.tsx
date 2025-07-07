@@ -1,4 +1,4 @@
-﻿import {
+import {
   ComponentParams,
   ComponentRendering,
   Placeholder,
@@ -13,10 +13,11 @@ interface ComponentProps {
 const PageHeaderwithMedia = (props: ComponentProps): JSX.Element => {
   return (
     <>
-      <h3 style={{ color: 'red' }}>Page Header With Media</h3>
-      <header className="page-header bg-dark">
-        <Placeholder name="page-header" rendering={props.rendering} />
-      </header>
+      <h3>Section With Media</h3>
+
+      <section className="section section-full @Model.CssClass">
+        <Placeholder name="section" rendering={props.rendering} />
+      </section>
     </>
   );
 };

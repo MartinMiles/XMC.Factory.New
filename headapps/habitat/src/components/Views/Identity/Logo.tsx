@@ -1,28 +1,23 @@
-﻿import {
-  ComponentParams,
-  ComponentRendering,
-  Placeholder,
-} from '@sitecore-jss/sitecore-jss-nextjs';
+﻿import { ImageField, Image } from '@sitecore-jss/sitecore-jss-nextjs';
 import React from 'react';
 
-interface ComponentProps {
-  rendering: ComponentRendering & { params: ComponentParams };
-  params: ComponentParams;
+interface Fields {
+  Logo: { value: ImageField };
 }
 
-const Logo = (props: ComponentProps): JSX.Element => {
+type LogoProps = {
+  params: { [key: string]: string };
+  fields: Fields;
+};
+
+const Logo = (props: LogoProps): JSX.Element => {
   return (
     <>
-    <h3>Logo</h3>
+      <h3 style={{ color: 'red' }}>Logo</h3>
+      <h4>{props.params.RenderingIdentifier}</h4>
       <a className="navbar-brand " href="http://habitat.dev.local/en">
         <span className="logo">
-          <img
-            src="/-/media/Habitat/Images/Logo/Habitat-New.png?h=50&amp;mh=50&amp;w=226&amp;hash=6ABE1FE87C08A5C1D7C2DB2E1DBBEDFF"
-            alt="Habitat Logo"
-            width="226"
-            height="50"
-            DisableWebEdit="False"
-          />
+          <Image field={props.fields.Logo} />
         </span>
       </a>
     </>

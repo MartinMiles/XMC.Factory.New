@@ -1,8 +1,4 @@
-﻿import {
-  ComponentParams,
-  ComponentRendering,
-  Placeholder,
-} from '@sitecore-jss/sitecore-jss-nextjs';
+﻿import { ComponentParams, ComponentRendering } from '@sitecore-jss/sitecore-jss-nextjs';
 import React from 'react';
 
 interface ComponentProps {
@@ -13,6 +9,7 @@ interface ComponentProps {
 const LanguageMenu = (props: ComponentProps): JSX.Element => {
   return (
     <>
+      <h3 style={{ color: 'red' }}>Language Menu</h3>
       <li className="dropdown">
         <a href="#" className="btn dropdown-toggle" data-toggle="dropdown">
           <i className="fa fa-globe"></i>

@@ -1,35 +1,28 @@
-﻿import {
-  ComponentParams,
-  ComponentRendering,
-  Placeholder,
-} from '@sitecore-jss/sitecore-jss-nextjs';
+﻿import { ImageField, LinkFieldValue, Link, Text } from '@sitecore-jss/sitecore-jss-nextjs';
 import React from 'react';
 
-interface ComponentProps {
-  rendering: ComponentRendering & { params: ComponentParams };
-  params: ComponentParams;
+interface Fields {
+  TeaserTitle: { value: string };
+  TeaserSummary: { value: string };
+  TeaserImage: { value: ImageField };
+  TeaserLink: { value: LinkFieldValue };
 }
 
-const ContentTeaserwithSummary = (props: ComponentProps): JSX.Element => {
+type ContentTeaserwithSummaryProps = {
+  params: { [key: string]: string };
+  fields: Fields;
+};
+
+const ContentTeaserwithSummary = (props: ContentTeaserwithSummaryProps): JSX.Element => {
   return (
     <>
       <h3 style={{ color: 'red' }}>Content Teaser with Summary</h3>
       <div className="well ">
-        <h4>About Habitat</h4>
-        <p>
-          Habitat sites are demonstration sites for the Sitecore® Experience Platform™.
-          <br />
-          The sites demonstrate the full set of capabilities and potential of the platform through a
-          number of both technical and business scenarios.
-        </p>
-        <a
-          className="btn btn-default"
-          rel="noopener noreferrer"
-          href="http://github.com/sitecore/habitat"
-          target="_blank"
-        >
-          Example available on GitHub
-        </a>
+        <h4>
+          <Text field={props.fields.TeaserTitle} />
+        </h4>
+        <Text field={props.fields.TeaserSummary} />
+        <Link field={props.fields.TeaserLink} />
       </div>
     </>
   );

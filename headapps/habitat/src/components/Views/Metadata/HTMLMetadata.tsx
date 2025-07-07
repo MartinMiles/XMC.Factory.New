@@ -13,11 +13,7 @@ interface ComponentProps {
 const HTMLMetadata = (props: ComponentProps): JSX.Element => {
   return (
     <>
-      
-      
-          <title>About Habitat - Habitat Sitecore Example Site</title>
-      
-      
+      <title>About Habitat - Habitat Sitecore Example Site</title>
     </>
   );
 };
