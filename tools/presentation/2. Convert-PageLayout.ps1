@@ -1,6 +1,7 @@
 param(
-    [string]$itemPath = "/sitecore/content/Zont/Habitat/Home/more",
-    [string]$Url      = "http://rssbplatform.dev.local/more-info"
+    [string]$itemPath = "/sitecore/content/Zont/Habitat/Home/home",
+    [string]$Url      = "http://rssbplatform.dev.local/home",
+    [string]$Layout      = "{C530C0D6-E215-4CE5-B0EC-90F6D636AF6A}"
 )
 
 # 1) Grab pure JSON from the helper
@@ -104,7 +105,7 @@ function MergeXml([string]$sharedXml, [string]$finalXml) {
 $counter = 1
 function ProcessFull($xml) {
   $doc           = [System.Xml.Linq.XDocument]::Parse($xml)
-  $cloud         = '{C530C0D6-E215-4CE5-B0EC-90F6D636AF6A}'
+  $cloud         = $Using:Layout
   $processedUids = @{}
   $uid2ph        = @{}    # New: map each uid to its final placeholder
 
