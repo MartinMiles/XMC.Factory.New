@@ -1,26 +1,29 @@
-﻿import {
-  ComponentParams,
-  ComponentRendering,
-  Placeholder,
-} from '@sitecore-jss/sitecore-jss-nextjs';
+﻿import { useSitecoreContext, Text, RichText } from '@sitecore-jss/sitecore-jss-nextjs';
 import React from 'react';
 
-interface ComponentProps {
-  rendering: ComponentRendering & { params: ComponentParams };
-  params: ComponentParams;
+interface PageTitleProps {
+  params: { [key: string]: string };
+  fields: {
+    Title: { value: string };
+    Summary: { value: string };
+  };
 }
 
-const PageTitle = (props: ComponentProps): JSX.Element => {
+const PageTitle = (props: PageTitleProps): JSX.Element => {
+  const { sitecoreContext } = useSitecoreContext();
+  const titleField = props?.fields?.Title || sitecoreContext?.route?.fields?.Title;
+  const summaryField = props?.fields?.Summary || sitecoreContext?.route?.fields?.Summary;
+
   return (
     <>
       <h3 style={{ color: 'red' }}>Page Title</h3>
       <header>
         <h1>
-          Find out more
+          <Text field={titleField} />
         </h1>
-          <div className="lead">
-            Want to know more about Helix and Habitat? Here are some interesting links, videos and material for you.
-          </div>
+        <div className="lead">
+          <RichText field={summaryField} />
+        </div>
       </header>
     </>
   );

@@ -20,7 +20,7 @@ interface MenuWithLinksProps {
 const Menuwithlinks = (props: MenuWithLinksProps): JSX.Element => {
   return (
     <>
-      <h3>Menu with links</h3>
+      <h3 style={{ color: 'red', margin: '10px' }}>Menu with links</h3>
       <nav>
         <ul className="nav nav-service navbar-nav nav-pills">
           {props.fields.items.map((item, idx) => (

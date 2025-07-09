@@ -9,6 +9,7 @@ interface ComponentProps {
 const PageTeaser = (props: ComponentProps): JSX.Element => {
   return (
     <>
+      <h3 style={{ color: 'red', margin: '5px' }}>Page Teaser</h3>
       <div className="thumbnail">
         <a href="http://habitat.dev.local/en/About-Habitat/Getting-Started">
           <img

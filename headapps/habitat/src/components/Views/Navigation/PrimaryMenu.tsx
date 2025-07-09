@@ -13,7 +13,7 @@ interface ComponentProps {
 const PrimaryMenu = (props: ComponentProps): JSX.Element => {
   return (
     <>
-      <h3 style={{ color: 'red' }}>Primary menu</h3>
+      <h3 style={{ color: 'red', margin: '10px' }}>Primary menu</h3>
       <div className="collapse navbar-collapse" id="siteNavbar">
         <ul className="nav navbar-nav">
           <li className=" dropdown">

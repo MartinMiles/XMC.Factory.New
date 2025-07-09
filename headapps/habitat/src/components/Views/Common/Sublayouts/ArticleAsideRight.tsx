@@ -13,8 +13,7 @@ interface ComponentProps {
 const ArticleAsideRight = (props: ComponentProps): JSX.Element => {
   return (
     <>
-      <h3 style={{ color: 'red' }}>Article Aside Right</h3>
-
+      <h3 style={{ color: 'red', margin: '10px' }}>Article Aside Right</h3>
       <div className="unknown">
         <div className="row">
           <div className="col-lg-8">

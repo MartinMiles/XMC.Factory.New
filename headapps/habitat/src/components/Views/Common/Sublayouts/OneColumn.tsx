@@ -13,7 +13,7 @@ interface ComponentProps {
 const OneColumn = (props: ComponentProps): JSX.Element => {
   return (
     <>
-      <h3>One Column</h3>
+      <h3 style={{ color: 'red', margin: '10px' }}>One Column</h3>
       <div className="container">
         <div className="row">
           <div className="col-md-12">

@@ -10,15 +10,15 @@ interface ComponentProps {
   params: ComponentParams;
 }
 
-const Section = (props: ComponentProps): JSX.Element => {
+const PageHeader = (props: ComponentProps): JSX.Element => {
   return (
     <>
-      <h3 style={{ color: 'red', margin: '10px' }}>Section</h3>
-      <section className="section section-full ">
-        <Placeholder name="section" rendering={props.rendering} />
-      </section>
+      <h3 style={{ color: 'red', margin: '10px' }}>Page Header</h3>
+      <header className="page-header">
+        <Placeholder name="page-header" rendering={props.rendering} />
+      </header>
     </>
   );
 };
 
-export default Section;
+export default PageHeader;

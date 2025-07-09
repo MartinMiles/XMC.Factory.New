@@ -1,45 +1,41 @@
-﻿import {
-  ComponentParams,
-  ComponentRendering,
-  Placeholder,
-} from '@sitecore-jss/sitecore-jss-nextjs';
+﻿import { ImageField, LinkFieldValue, Text, Image, Link } from '@sitecore-jss/sitecore-jss-nextjs';
 import React from 'react';
 
-interface ComponentProps {
-  rendering: ComponentRendering & { params: ComponentParams };
-  params: ComponentParams;
+interface Fields {
+  TeaserTitle: { value: string };
+  TeaserSummary: { value: string };
+  TeaserImage: { value: ImageField };
+  TeaserLink: { value: LinkFieldValue };
 }
 
-const ContentTeaserWithImageAndSummary = (props: ComponentProps): JSX.Element => {
+type ContentTeaserWithImageAndSummaryProps = {
+  params: { [key: string]: string };
+  fields: Fields;
+};
+
+const ContentTeaserWithImageAndSummary = (
+  props: ContentTeaserWithImageAndSummaryProps
+): JSX.Element => {
   return (
     <>
+      <h3 style={{ color: 'red', margin: '10px' }}>Content Teaser With Image And Summary</h3>
+
       <div className="thumbnail  m-b-1">
         <header className="thumbnail-header">
-          <h3>Recommended Reading</h3>
+          <h3>
+            <Text field={props.fields.TeaserTitle} />
+          </h3>
         </header>
         <div>
           <a href="http://www.amazon.com/Agile-Principles-Patterns-Practices-C/dp/0131857258">
-            <img
-              src="/-/media/Habitat/Images/Content/Recommended-Reading.png?h=172&amp;mw=500&amp;w=500&amp;hash=7FA2361A398D2C3C1FF9F169CC5A0985"
-              className="img-responsive"
-              alt="Recommended Reading"
-              width="500"
-              height="172"
-            />
+            <Image field={props.fields.TeaserImage} />
           </a>
         </div>
         <div className="caption">
           <p>
-            Many of the principles and thoughts behind the Habitat methodology are described in the Books by Robert C. Martin. Recommended reading includes: "Clean Code: A Handbook of Agile Software Craftsmanship" and "Agile Principles, Patterns, and Practices in C#"
+            <Text field={props.fields.TeaserSummary} />
           </p>
-          <a
-            className="btn btn-default"
-            rel="noopener noreferrer"
-            href="http://www.amazon.com/Agile-Principles-Patterns-Practices-C/dp/0131857258"
-            target="_blank"
-          >
-            Agile Principles, Patterns and Practises
-          </a>
+          <Link field={props.fields.TeaserLink} />
         </div>
       </div>
     </>

@@ -59,7 +59,7 @@ export const Default = (props: BreadcrumbProps): JSX.Element => {
       ));
     return (
       <div className="container">
-        <h3 style={{ color: 'red' }}>Breadcrumb</h3>
+        <h3 style={{ color: 'red', margin: '10px' }}>Breadcrumb</h3>
         <ol className="breadcrumb breadcrumb-1">
           {list}
           <li>
