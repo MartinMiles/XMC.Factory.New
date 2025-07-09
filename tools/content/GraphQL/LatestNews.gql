@@ -1,0 +1,34 @@
+query LatestNewsQuery($datasource: String!, $language: String!) {
+  search(
+    where: {
+     AND: [
+        {
+          name: "_templates"
+          value: "{B69277AD-E917-4B9F-9136-A12E0A3E462F}"
+          operator: CONTAINS
+        }
+        {
+           name: "_path"
+           value: $datasource
+           operator: CONTAINS
+        }
+        {
+           name: "_language"
+           value: $language
+           operator: EQ
+        }
+      ]
+    }
+  )
+  {
+    results {
+      ... on Item {
+        newsTitle: field(name: "NewsTitle") { value }
+        newsDate: field(name: "NewsDate") { value }
+        url {
+          url
+        }
+      }
+    }
+  }
+}

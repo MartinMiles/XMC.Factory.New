@@ -1,0 +1,20 @@
+query TitleQuery($contextItem: String!, $language: String!) {
+  datasource: item(path: $contextItem, language: $language) {
+    ancestors(hasLayout: true) {
+      displayName
+    title: field(name: "Title") {
+      value
+    }
+      url {
+        path
+      }
+    }
+    displayName
+    title: field(name: "Title") {
+      value
+    }
+    url {
+      path
+    }
+  }
+}
