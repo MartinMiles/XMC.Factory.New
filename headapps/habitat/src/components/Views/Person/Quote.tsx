@@ -1,34 +1,34 @@
-﻿import {
-  ComponentParams,
-  ComponentRendering,
-  Placeholder,
-} from '@sitecore-jss/sitecore-jss-nextjs';
+﻿import { ImageField, Text, Image } from '@sitecore-jss/sitecore-jss-nextjs';
 import React from 'react';
 
-interface ComponentProps {
-  rendering: ComponentRendering & { params: ComponentParams };
-  params: ComponentParams;
+interface Fields {
+  Name: { value: string };
+  Title: { value: string };
+  Quote: { value: string };
+  Picture: { value: ImageField };
 }
 
-const Quote = (props: ComponentProps): JSX.Element => {
+type QuoteProps = {
+  params: { [key: string]: string };
+  fields: Fields;
+};
+
+const Quote = (props: QuoteProps): JSX.Element => {
   return (
     <>
       <h3 style={{ color: 'red', margin: '10px' }}>Quote</h3>
       <blockquote className="blockquote-center ">
         <header>
-          <img
-            src="/-/media/Habitat/Images/Content/Anders-Laub-Christoffersen.png?h=119&amp;mh=150&amp;w=157&amp;hash=A5FC02CF7D1DB385E45A3EC53EF77CFF"
-            className="img-responsive"
-            alt="Anders Laub Christoffersen"
-            width="157"
-            height="119"
-            DisableWebEdit="False"
-          />
-          <p>Anders Laub Christoffersen</p>
-          <p>Sitecore MVP</p>
+          <Image field={props.fields.Picture} />
+          <p>
+            <Text field={props.fields.Name} />
+          </p>
+          <p>
+            <Text field={props.fields.Title} />
+          </p>
         </header>
         <p>
-          [Habitat...] is nothing less than groundbreaking, it is a real revolution in the way that Sitecore teaches developers to work with their product.
+          <Text field={props.fields.Quote} />
         </p>
       </blockquote>
     </>
