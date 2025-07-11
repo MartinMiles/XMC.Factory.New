@@ -5,7 +5,7 @@ import { useI18n } from 'next-localization';
 export function useTranslations() {
   const i18n = useI18n();
   return {
-    readLabel: i18n?.t('read'),
+    readLabel: i18n?.t('Read more'),
   };
 }
 
