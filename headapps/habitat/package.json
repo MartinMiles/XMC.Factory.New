@@ -40,10 +40,12 @@
     "font-awesome": "^4.7.0",
     "graphql": "~15.8.0",
     "graphql-tag": "^2.12.6",
+    "i18next": "^25.3.2",
     "next": "^14.2.18",
     "next-localization": "^0.12.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-i18next": "^15.6.0",
     "sass": "^1.52.3",
     "sass-alias": "^1.0.5",
     "sharp": "0.32.6"

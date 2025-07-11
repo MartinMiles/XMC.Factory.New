@@ -1,39 +1,61 @@
-﻿import { ComponentParams, ComponentRendering } from '@sitecore-jss/sitecore-jss-nextjs';
+﻿import { DictionaryPhrases, Image, RichText } from '@sitecore-jss/sitecore-jss-nextjs';
 import React from 'react';
+import { useI18n } from 'next-localization';
 
-interface ComponentProps {
-  rendering: ComponentRendering & { params: ComponentParams };
-  params: ComponentParams;
+export function useTranslations() {
+  const i18n = useI18n();
+  return {
+    readLabel: i18n?.t('read'),
+  };
 }
 
-const PageTeaser = (props: ComponentProps): JSX.Element => {
+type PageTeaserProps = {
+  dictionary: DictionaryPhrases;
+  params: { [key: string]: string };
+  fields: {
+    data: {
+      datasource: {
+        Title: { value: string };
+        Summary: { value: string };
+        Image: {
+          jsonValue: {
+            src: string;
+            alt: string;
+            width: number;
+            height: number;
+          };
+        };
+        url: { url: string };
+      };
+    };
+  };
+};
+
+const PageTeaser = (props: PageTeaserProps): JSX.Element => {
+  const model = props.fields.data.datasource;
+  const translations = useTranslations();
+
   return (
     <>
       <h3 style={{ color: 'red', margin: '5px' }}>Page Teaser</h3>
       <div className="thumbnail">
-        <a href="http://habitat.dev.local/en/About-Habitat/Getting-Started">
-          <img
-            src="/-/media/Habitat/Images/Square/Habitat-022-square.jpg?h=500&amp;mw=500&amp;w=500&amp;hash=FF6CADD12E5A79A37835E89D88B034A5"
-            className="img-responsive"
-            alt=""
-            width="500"
+        <a href={model.url.url} target="_blank" rel="noopener noreferrer">
+          <Image
+            field={model.Image.jsonValue}
             height="500"
-            DisableWebEdit="False"
+            width="500"
+            imageParams={{ mw: 500, mh: 500 }}
           />
         </a>
         <div className="caption">
-          <h3 className="teaser-heading">Getting Started</h3>
+          <h3 className="teaser-heading">
+            <RichText field={model.Title} />
+          </h3>
           <p>
-            <p>
-              Sitecore Helix a defined methodology with conventions and practises - Habitat is an
-              example implementation available for your understanding.
-            </p>
+            <RichText field={model.Summary} />
           </p>
-          <a
-            href="http://habitat.dev.local/en/About-Habitat/Getting-Started"
-            className="btn btn-default"
-          >
-            Read more
+          <a href={model.url.url} className="btn btn-default">
+            {translations.readLabel}
           </a>
         </div>
       </div>

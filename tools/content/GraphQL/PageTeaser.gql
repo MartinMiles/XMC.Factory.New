@@ -1,0 +1,16 @@
+query PageTeaserQuery($datasource: String!, $language: String!) {
+  datasource: item(path: $datasource, language: $language) {
+    Title: field(name: "Title"){
+      value
+    }
+    Summary: field(name: "Summary"){
+      value
+    }
+    Image: field(name: "Image"){
+      jsonValue
+    }
+    url{
+      url
+    }
+  }
+}
