@@ -29,7 +29,6 @@ const MainNavigation = (props: ComponentProps): JSX.Element => {
               <span className="icon-bar"></span>
               <span className="icon-bar"></span>
             </button>
-
             <Placeholder name="navbar-left" rendering={props.rendering} />
           </div>
           <div className="navbar-center"></div>
