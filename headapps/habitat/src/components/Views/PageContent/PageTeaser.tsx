@@ -19,10 +19,12 @@ type PageTeaserProps = {
         Summary: { value: string };
         Image: {
           jsonValue: {
-            src: string;
-            alt: string;
-            width: number;
-            height: number;
+            value: {
+              src: string;
+              alt: string;
+              width: number;
+              height: number;
+            };
           };
         };
         url: { url: string };
@@ -40,11 +42,11 @@ const PageTeaser = (props: PageTeaserProps): JSX.Element => {
       <h3 style={{ color: 'red', margin: '5px' }}>Page Teaser</h3>
       <div className="thumbnail">
         <a href={model.url.url} target="_blank" rel="noopener noreferrer">
-          <Image
-            field={model.Image.jsonValue}
-            height="500"
-            width="500"
-            imageParams={{ mw: 500, mh: 500 }}
+          <img
+            src={model.Image.jsonValue.value.src}
+            width={model.Image.jsonValue.value.width}
+            height={model.Image.jsonValue.value.height}
+            alt={model.Image.jsonValue.value.alt}
           />
         </a>
         <div className="caption">
