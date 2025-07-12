@@ -1,8 +1,4 @@
-﻿import {
-  ComponentParams,
-  ComponentRendering,
-  Placeholder,
-} from '@sitecore-jss/sitecore-jss-nextjs';
+﻿import { ComponentParams, ComponentRendering } from '@sitecore-jss/sitecore-jss-nextjs';
 import React from 'react';
 
 interface ComponentProps {

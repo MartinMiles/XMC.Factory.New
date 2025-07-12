@@ -1,41 +1,36 @@
-﻿import {
-  ComponentParams,
-  ComponentRendering,
-  Placeholder,
-} from '@sitecore-jss/sitecore-jss-nextjs';
+﻿import { Text, Link, ImageField, LinkFieldValue } from '@sitecore-jss/sitecore-jss-nextjs';
 import React from 'react';
 
-interface ComponentProps {
-  rendering: ComponentRendering & { params: ComponentParams };
-  params: ComponentParams;
+interface Fields {
+  TeaserTitle: { value: string };
+  TeaserSummary: { value: string };
+  TeaserImage: { value: ImageField };
+  TeaserLink: { value: LinkFieldValue };
 }
 
-const CalltoAction = (props: ComponentProps): JSX.Element => {
+type CalltoActionProps = {
+  params: { [key: string]: string };
+  fields: Fields;
+};
+
+const CalltoAction = (props: CalltoActionProps): JSX.Element => {
   return (
     <>
       <h3 style={{ color: 'red', margin: '10px' }}>Call to Action</h3>
       <div
         className="jumbotron text-center bg-media"
         style={{
-          backgroundImage:
-            "url('/-/media/Habitat/Images/Wide/Habitat-038-wide.jpg?h=660&w=1920&hash=58403D343E52524B5C12E05D7D58E604')",
+          backgroundImage: `url('${props.fields.TeaserImage?.value?.src}')`,
         }}
       >
         <span className="label">Want More?</span>
-        <h2>Check out the Sitecore Habitat Demos</h2>
+        <h2>
+          <Text field={props.fields.TeaserTitle} />
+        </h2>
         <p className="">
-          Just as this Habitat site, there are additional Sitecore demo sites available on github.
-          <br />
-          Check out for example the Legal Services, Financial Services or Utilities sites.
+          <Text field={props.fields.TeaserSummary} />
         </p>
-        <a
-          className="btn btn-primary btn-lg"
-          rel="noopener noreferrer"
-          href="https://github.com/sitecore/sitecore.demo"
-          target="_blank"
-        >
-          Sitecore Demos on GitHub
-        </a>
+        <Link field={props.fields.TeaserLink} />
       </div>
     </>
   );

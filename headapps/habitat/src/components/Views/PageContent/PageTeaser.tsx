@@ -1,4 +1,4 @@
-﻿import { DictionaryPhrases, Image, RichText } from '@sitecore-jss/sitecore-jss-nextjs';
+﻿import { DictionaryPhrases, RichText } from '@sitecore-jss/sitecore-jss-nextjs';
 import React from 'react';
 import { useI18n } from 'next-localization';
 
