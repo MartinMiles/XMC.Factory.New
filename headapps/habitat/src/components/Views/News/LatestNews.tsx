@@ -12,12 +12,6 @@ interface ItemProps {
   newsDate: { value: Date };
   newsTitle: { value: string };
 }
-// interface LatestNewsProps {
-//   params: { [key: string]: string };
-//   fields: {
-//     items: ItemProps[];
-//   };
-// }
 
 interface LatestNewsProps {
   params: { [key: string]: string };

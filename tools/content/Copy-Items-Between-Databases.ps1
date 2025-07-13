@@ -4,7 +4,8 @@
 param(
     [string[]]$PathMap = @(
         "false=/sitecore/content/Habitat/Home=/sitecore/content/Zont/Habitat/Home/Home",
-        "true=/sitecore/templates/Project/Habitat/Page Types/Home=/sitecore/templates/Project/Zont/Habitat/Page Types/Home"
+        "true=/sitecore/templates/Project/Habitat/Page Types/Home=/sitecore/templates/Project/Zont/Habitat/Page Types/Home",
+        "false=/sitecore/content/Habitat=/sitecore/content/Zont/Habitat/Habitat"
     ),
     [string]$sourceDb     = "old",
     [string]$targetDb     = "master"
