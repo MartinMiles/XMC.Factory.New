@@ -66,3 +66,8 @@
 - Set-DatasourceField.ps1 (for 3 renderings)
 - Manually set resolvers to 4 renderings
 - set graphql queries Set-FieldValue-FromFile
+
+
+## Notes and know issues:
+
+Before opening in experience editor, make sure all the child pages copied

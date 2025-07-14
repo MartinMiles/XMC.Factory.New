@@ -1,6 +1,6 @@
 param(
-    [string]$itemPath = "/sitecore/content/Zont/Habitat/Home/home",
-    [string]$Url      = "http://rssbplatform.dev.local/home",
+    [string]$itemPath, # = "/sitecore/content/Zont/Habitat/Home/modules",
+    [string]$Url, #      = "http://rssbplatform.dev.local/modules",
     [string]$Layout      = "{C530C0D6-E215-4CE5-B0EC-90F6D636AF6A}"
 )
 
@@ -13,6 +13,7 @@ if ($idx -lt 0) {
     exit 1
 }
 $jsonText = $jsonJoined.Substring($idx).Trim()
+
 
 # 2) Open SPE session
 Set-Location $PSScriptRoot
@@ -29,23 +30,20 @@ $session = New-ScriptSession `
         -Session     $session `
         -Raw         `
         -ErrorAction Stop `
-        -Verbose     `
         -ScriptBlock {
 
             # function Throw-ParseError { param($m) Write-Error $m; throw $m }
 
 
-
-  [bool]  $processStandardValues = $true
-  [bool]  $processPageLayout     = $true
+[bool]$processStandardValues = $true
+[bool]$processPageLayout     = $true
 
 
 Add-Type -AssemblyName "Newtonsoft.Json"
 Add-Type -AssemblyName "System.Xml.Linq"
 
-# initialize mappings
-$uid2dyn = @{}
-$ph2dyn  = @{}
+$uid2dyn = @{}   # uid to dynamic placeholder ID
+$ph2dyn  = @{}   # final placeholder to dynamic placeholder ID
 
 function SetField($item, $fieldId, $value) {
   if (-not $item.Editing.IsEditing) { $item.Editing.BeginEdit() }
@@ -62,19 +60,20 @@ function SetLocalAttr($elem, $name, $value) {
   if ($a.Count) { $a[0].Value = $value } else { $elem.SetAttributeValue($name, $value) }
 }
 
-# 1) Load JSON maps
-# $jsonPath = [System.Web.Hosting.HostingEnvironment]::MapPath("~/App_Data/about.json")
-# if (-not (Test-Path $jsonPath)) { Throw "more.json not found: $jsonPath" }
-$jsonRoot = [Newtonsoft.Json.Linq.JToken]::Parse($Using:jsonText)
+# 1) load JSON maps
+# $jsonPath = [System.Web.Hosting.HostingEnvironment]::MapPath("~/App_Data/modules.json")
+# if (-not (Test-Path $jsonPath)) { Throw "home.json not found: $jsonPath" }
+$jsonRoot = [Newtonsoft.Json.Linq.JToken]::Parse($using:jsonText)
 $all      = New-Object 'System.Collections.Generic.List[Newtonsoft.Json.Linq.JObject]'
+
 function Rec([Newtonsoft.Json.Linq.JToken]$n) {
   if ($n -is [Newtonsoft.Json.Linq.JObject]) { $all.Add($n) }
   foreach ($c in $n.Children()) { Rec $c }
 }
 Rec $jsonRoot
 
-$map       = @{}
-$parentMap = @{}
+$map       = @{}  # uid to xmc base placeholder
+$parentMap = @{}  # uid to parent uid
 $zeroGuid  = '00000000-0000-0000-0000-000000000000'
 
 foreach ($o in $all) {
@@ -91,7 +90,7 @@ foreach ($o in $all) {
 }
 Write-Host "Loaded mappings: uid>xmc=$($map.Count), parentMap=$($parentMap.Count)"
 
-# 2) Merge shared + final (unchanged)
+# 2) merge shared plus final layout XML
 function MergeXml([string]$sharedXml, [string]$finalXml) {
   $master = [System.Xml.Linq.XDocument]::Parse($sharedXml)
   if (-not [string]::IsNullOrWhiteSpace($finalXml)) {
@@ -101,126 +100,161 @@ function MergeXml([string]$sharedXml, [string]$finalXml) {
   return $master.ToString()
 }
 
-# 3) Process layout XML nodes with new placeholder logic
+# 3) two pass processing to ensure parents resolved before children
 $counter = 1
 function ProcessFull($xml) {
-  $doc           = [System.Xml.Linq.XDocument]::Parse($xml)
-  $cloud         = $Using:Layout
-  $processedUids = @{}
-  $uid2ph        = @{}    # New: map each uid to its final placeholder
+  $doc    = [System.Xml.Linq.XDocument]::Parse($xml)
+  $cloud  = $Using:Layout
+  $allR   = @($doc.Root.Elements() |
+             Where-Object { $_.Name.LocalName -eq 'd' } |
+             ForEach-Object { $_.Elements() | Where-Object { $_.Name.LocalName -eq 'r' } })
+  $processedUids  = @{}
+  $uid2ph         = @{}   # uid to its final placeholder path
 
-  foreach ($d in $doc.Root.Elements() | Where-Object { $_.Name.LocalName -eq 'd' }) {
-    $d.SetAttributeValue('l', $cloud)
-    foreach ($r in $d.Elements() | Where-Object { $_.Name.LocalName -eq 'r' }) {
+  # capture rendering ID, UID, original placeholder for reporting
+  $idMap           = @{}  # uid to rendering-definition-ID
+  $originalPhMap   = @{}  # uid to old placeholder
+  foreach ($r in $allR) {
+    $aUid = $r.Attribute('uid')
+    if ($aUid) {
+      $key = $aUid.Value.Trim('{}').ToLowerInvariant()
+      $aId = $r.Attribute('id')
+      $idMap[$key]         = if ($aId) { $aId.Value } else { '' }
+      $oPh = GetLocalAttr $r 'ph'
+      $originalPhMap[$key] = if ($oPh.Count) { $oPh[0].Value } else { '' }
+    }
+  }
+
+  # assign device GUID on each layout definition node
+  $doc.Root.Elements() | Where-Object { $_.Name.LocalName -eq 'd' } |
+    ForEach-Object { $_.SetAttributeValue('l', $cloud) }
+
+  do {
+    $didAny = $false
+    foreach ($r in $allR) {
       $aU  = $r.Attribute('uid')
       $key = if ($aU) { $aU.Value.Trim('{}').ToLowerInvariant() } else { $null }
+      if ($key -and $processedUids.ContainsKey($key)) { continue }
 
-      if ($key -and $processedUids.ContainsKey($key)) {
-        $r.Remove(); continue
+      # check parent resolution
+      $parentKey = $null; $parentDyn = $null
+      if ($key -and $parentMap.ContainsKey($key)) {
+        $parentKey = $parentMap[$key]
+        if ($uid2dyn.ContainsKey($parentKey) -and $uid2ph.ContainsKey($parentKey)) {
+          $parentDyn = $uid2dyn[$parentKey]
+        } else { continue }
       }
 
+      # assign or reuse dynamic ID
       if ($key -and -not $uid2dyn.ContainsKey($key)) {
         $uid2dyn[$key] = $counter; $counter++
       }
       $dyn = if ($key) { $uid2dyn[$key] } else { $counter; $counter++ }
-      if ($key) { $processedUids[$key] = $true }
 
-      # base placeholder from JSON xmc or existing attribute
+      # determine base placeholder
       if ($key -and $map.ContainsKey($key)) { $basePh = $map[$key] }
       else {
         $oPh    = GetLocalAttr $r 'ph'
         $basePh = if ($oPh.Count) { $oPh[0].Value } else { '' }
       }
 
-      # determine parent key + dyn
-      if ($key -and $parentMap.ContainsKey($key)) {
-        $parentKey = $parentMap[$key]
-        $parentDyn = if ($uid2dyn.ContainsKey($parentKey)) { $uid2dyn[$parentKey] } else { $null }
-      } else {
-        $parentKey = $null; $parentDyn = $null
-      }
-
-      # New logic, leaf + prefix
-      $leaf = $basePh.TrimEnd('/').Split('/')[-1]
+      # build final placeholder path
+      $leaf = $basePh.TrimEnd('/') -split '/' | Select-Object -Last 1
       if ($parentDyn) {
-        if ($uid2ph.ContainsKey($parentKey)) {
-          $parentFinalPh = $uid2ph[$parentKey]
-        } else {
-          $baseParentPath = [System.IO.Path]::GetDirectoryName($basePh).Replace('\','/')
-          $parentFinalPh  = if ($baseParentPath.StartsWith("/")) { $baseParentPath } else { "/$baseParentPath" }
-        }
-        $prefix  = if ($parentFinalPh.StartsWith("/")) { $parentFinalPh } else { "/$parentFinalPh" }
-        $finalPh = "$prefix/$leaf-0-$parentDyn"
+        $parentFinal = $uid2ph[$parentKey]
+        $prefix      = if ($parentFinal.StartsWith("/")) { $parentFinal } else { "/$parentFinal" }
+        $finalPh     = "$prefix/$leaf-0-$parentDyn"
       } else {
         $finalPh = "$leaf"
       }
 
-      # record for deeper levels
-      if ($key) { $uid2ph[$key] = $finalPh }
-
-      # map placeholder to its own dyn
+      # record mappings
+      if ($key) {
+        $uid2ph[$key]        = $finalPh
+        $processedUids[$key] = $true
+      }
       $ph2dyn[$finalPh] = $dyn
 
-      # rebuild parameters (unchanged)
+      # rewrite parameters
       $oPr    = GetLocalAttr $r 'par'
       $old    = if ($oPr.Count) { $oPr[0].Value } else { '' }
       $parts  = if ($old) { $old.Split('&') } else { @() }
-      $clean  = $parts | Where-Object { $_ -and -not $_.StartsWith('DynamicPlaceholderId=') } | Select-Object -Unique
+      $clean  = $parts |
+                Where-Object { $_ -and -not $_.StartsWith('DynamicPlaceholderId=') } |
+                Select-Object -Unique
       $cs     = ($clean -join '&').Trim('&')
       $newPar = if ($cs) { "DynamicPlaceholderId=$dyn&$cs" } else { "DynamicPlaceholderId=$dyn" }
       SetLocalAttr $r 'par' $newPar
-      Write-Host "  Set par='$newPar' for uid='$key'"
+      SetLocalAttr $r 'ph'  $finalPh
 
-      # set placeholder attribute
-      SetLocalAttr $r 'ph' $finalPh
-      Write-Host "  Set ph ='$finalPh' for uid='$key'"
+      Write-Host "  r uid='$key' par='$newPar' ph='$finalPh'"
+      $didAny = $true
+    }
+  } while ($didAny -and ($processedUids.Count -lt $allR.Count))
+
+  # report unresolved renderings
+  $unresolved = $originalPhMap.Keys |
+                Where-Object { -not $processedUids.ContainsKey($_) }
+  if ($unresolved.Count) {
+    Write-Host "The following renderings could not be resolved due to missing parent mapping:"
+    foreach ($key in $unresolved) {
+      $rId   = $idMap[$key]
+      $oldPh = $originalPhMap[$key]
+      Write-Host "- Rendering ID: $rId, UID: $key, Old placeholder: $oldPh"
     }
   }
+
   return $doc.ToString()
 }
 
-# 4) preserve root attributes (unchanged)
+# 4) preserve root attributes
 function PreserveRootAttrs($processedXml, $originalXml) {
   if ([string]::IsNullOrWhiteSpace($originalXml)) { return $processedXml }
   $orig = [System.Xml.Linq.XDocument]::Parse($originalXml)
   $new  = [System.Xml.Linq.XDocument]::Parse($processedXml)
-  foreach ($a in $orig.Root.Attributes()) { $new.Root.SetAttributeValue($a.Name, $a.Value) }
+  foreach ($a in $orig.Root.Attributes()) {
+    $new.Root.SetAttributeValue($a.Name, $a.Value)
+  }
   return $new.ToString()
 }
 
-# 5) apply to Sitecore item (unchanged)
-Write-Host "Processing item: $Using:itemPath"
+# 5) apply to Sitecore item
+Write-Host "Processing item: $itemPath"
 $item = Get-Item -Path $Using:itemPath -ErrorAction Stop
 $ids  = [Sitecore.FieldIDs]
 
 if ($processStandardValues) {
-  $std     = $item.Template.StandardValues
+  $std = $item.Template.StandardValues
   $sharedS = ProcessFull $std.Fields[$ids::LayoutField].Value
   SetField $std $ids::LayoutField $sharedS
 
-  $mergedS = MergeXml $sharedS $std.Fields[$ids::FinalLayoutField].Value
-  $procS   = ProcessFull $mergedS
-  $withRt  = PreserveRootAttrs $procS $std.Fields[$ids::FinalLayoutField].Value
-  SetField $std $ids::FinalLayoutField $withRt
+  if (-not [string]::IsNullOrWhiteSpace($std.Fields[$ids::FinalLayoutField].Value)) {
+    $mergedS = MergeXml $sharedS $std.Fields[$ids::FinalLayoutField].Value
+    $procS   = ProcessFull $mergedS
+    $withRt  = PreserveRootAttrs $procS $std.Fields[$ids::FinalLayoutField].Value
+    SetField $std $ids::FinalLayoutField $withRt
+  } else {
+    Write-Host "Final Layout for standard values is empty, leaving as is."
+  }
 }
 
 if ($processPageLayout) {
-  $page    = ProcessFull $item.Fields[$ids::LayoutField].Value
+  $page = ProcessFull $item.Fields[$ids::LayoutField].Value
   SetField $item $ids::LayoutField $page
 
-  $mergedP = MergeXml $page $item.Fields[$ids::FinalLayoutField].Value
-  $procP   = ProcessFull $mergedP
-  $withRtP = PreserveRootAttrs $procP $item.Fields[$ids::FinalLayoutField].Value
-  SetField $item $ids::FinalLayoutField $withRtP
+  if (-not [string]::IsNullOrWhiteSpace($item.Fields[$ids::FinalLayoutField].Value)) {
+    $mergedP = MergeXml $page $item.Fields[$ids::FinalLayoutField].Value
+    $procP   = ProcessFull $mergedP
+    $withRtP = PreserveRootAttrs $procP $item.Fields[$ids::FinalLayoutField].Value
+    SetField $item $ids::FinalLayoutField $withRtP
+  } else {
+    Write-Host "Final Layout for page item is empty, leaving as is."
+  }
 }
 
-Write-Host "All done for $Using:itemPath"
+Write-Output ("`n`nAll done for " + $Using:itemPath)
 
+    }
+Stop-ScriptSession -Session $session
 
-
-
-
-        }
-
-    Stop-ScriptSession -Session $session
 
