@@ -14,7 +14,7 @@ const LoginMenu = (props: ComponentProps): JSX.Element => {
   return (
     <>
       <h3 style={{ color: 'red' }}>Login Menu</h3>
-      {/* <h4 style={{ color: 'red' }}>{props.rendering.uid}</h4> */}
+
       <li className="dropdown hidden-xs">
         <a href="#" className="btn dropdown-toggle" data-toggle="dropdown">
           <i className="fa fa-user"></i>

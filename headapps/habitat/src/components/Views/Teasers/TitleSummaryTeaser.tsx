@@ -9,6 +9,7 @@ interface ComponentProps {
 const ContentTeaserwithSummary = (props: ComponentProps): JSX.Element => {
   return (
     <>
+      <h3 style={{ color: 'red' }}>Content Teaser with Summary</h3>
       <div className="well ">
         <h4>About Habitat</h4>
         <p>
