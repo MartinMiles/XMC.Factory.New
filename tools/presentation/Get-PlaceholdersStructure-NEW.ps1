@@ -13,12 +13,12 @@ try {
   $res.Close()
 }
 catch {
-  Write-Error "Error downloading '$Url': $_"
+  Write-Output "{}"
   exit 1
 }
 
 # 2) Extract component markers
-$pattern = "<!--\s*(start|end)-component='(?<json>[^']+)'\s*-->"
+$pattern = "<!--\s*(start|end)-component='(?<json>[^\']+)'[\s\-]*-->"
 $matches = [regex]::Matches(
   $content,
   $pattern,
@@ -56,7 +56,6 @@ $container = [PSCustomObject]@{
 }
 $current    = $container
 $stack      = New-Object System.Collections.Stack
-$ignoreKeys = @()
 
 # 5) Build the tree
 foreach ($m in $matches) {
@@ -68,12 +67,9 @@ foreach ($m in $matches) {
   $origPh = $origPh -replace '-\{[0-9a-fA-F-]{8}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{4}-[0-9a-fA-F-]{12}\}-\d+$', ''
 
   if ($type -eq 'start') {
-    if ($key -eq $current.key) {
-      $ignoreKeys += $key
-      continue
-    }
+    # === PATCH: Never dedupe/skip by key or UID ===
 
-    # Compute xmc property exactly as before
+    # Compute xmc property as before
     if ($meta.uid -eq $rootUid) {
       $xmcValue = ''
     }
@@ -100,7 +96,6 @@ foreach ($m in $matches) {
       $xmcValue  = "/$joined"
     }
 
-    # --- NEW: add parent property here ---
     $node = [PSCustomObject]@{
       name         = $meta.name
       id           = $meta.id
@@ -113,12 +108,10 @@ foreach ($m in $matches) {
       placeholders = @{ }
     }
 
-    # capture the real root
     if ($meta.uid -eq $rootUid -and $meta.placeholder -eq $rootPlaceholder -and $meta.name -eq $rootName) {
       $root = $node
     }
 
-    # attach to current
     if ($current.placeholders.ContainsKey($origPh)) {
       $current.placeholders[$origPh] += $node
     }
@@ -126,18 +119,19 @@ foreach ($m in $matches) {
       $current.placeholders[$origPh] = @($node)
     }
 
-    # descend
     $stack.Push($current)
     $current = $node
   }
   else {
-    # on end-component
-    if ($stack.Count -gt 0) {
-      $current = $stack.Pop()
+    # PATCHED LOGIC: allow stack empty ONLY for root component
+    if ($stack.Count -eq 0) {
+      if ($meta.uid -eq "00000000-0000-0000-0000-000000000000") {
+        continue
+      } else {
+        throw "No parent on stack for component end: $($meta.name) [$key]"
+      }
     }
-    else {
-      throw "No parent on stack for component end: $($meta.name) [$key]"
-    }
+    $current = $stack.Pop()
   }
 }
 
@@ -157,7 +151,6 @@ if (-not $root) {
 
 # 7) Output JSON
 $json = ($root | ConvertTo-Json -Depth 100 | ForEach-Object { $_.TrimEnd() }) -join "`n"
-# collapse multiple blank lines into one
 $json = $json -replace "(`n){2,}", "`n"
 
 if ($OutputPath) {

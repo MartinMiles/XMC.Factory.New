@@ -3,11 +3,8 @@
 ###
 param(
     [string[]]$PathMap = @(
-        "true=/sitecore/templates/Project/Habitat/Page Types/Home=/sitecore/templates/Project/Zont/Habitat/Page Types/Home",
         "false=/sitecore/content/Habitat/Home=/sitecore/content/Zont/Habitat/Home/Home",
-        "true=/sitecore/content/Habitat/Home/Modules=/sitecore/content/Zont/Habitat/Home/Modules",
-        "true=/sitecore/content/Habitat/Home/About Habitat=/sitecore/content/Zont/Habitat/Home/About Habitat",
-        "true=/sitecore/content/Habitat/Home/More Info=/sitecore/content/Zont/Habitat/Home/More Info",
+        "true=/sitecore/templates/Project/Habitat/Page Types/Home=/sitecore/templates/Project/Zont/Habitat/Page Types/Home",
         "false=/sitecore/content/Habitat=/sitecore/content/Zont/Habitat/Habitat"
     ),
     [string]$sourceDb     = "old",

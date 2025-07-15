@@ -1,6 +1,6 @@
 param(
-    [string]$itemPath, # = "/sitecore/content/Zont/Habitat/Home/modules",
-    [string]$Url, #      = "http://rssbplatform.dev.local/modules",
+    [string]$itemPath, # = "/sitecore/content/Zont/Habitat/Home/About Habitat/Introduction",
+    [string]$Url, #      = "http://rssbplatform.dev.local/about-habitat/introduction",
     [string]$Layout      = "{C530C0D6-E215-4CE5-B0EC-90F6D636AF6A}"
 )
 
@@ -12,8 +12,13 @@ if ($idx -lt 0) {
     Write-Error "Helper did not return JSON."
     exit 1
 }
+
 $jsonText = $jsonJoined.Substring($idx).Trim()
 
+if($jsonText -eq "{}") {
+    Write-Warning "Skipping page '$itemPath' as unable to obtain a layout from the URL '$Url'."
+    exit 0
+}
 
 # 2) Open SPE session
 Set-Location $PSScriptRoot
@@ -25,12 +30,11 @@ $session = New-ScriptSession `
     -SharedSecret  $config.SPE_REMOTING_SECRET
 
 # 3) Invoke conversion on CM, echo back every line
-
-    $output = Invoke-RemoteScript `
-        -Session     $session `
-        -Raw         `
-        -ErrorAction Stop `
-        -ScriptBlock {
+$output = Invoke-RemoteScript `
+    -Session     $session `
+    -Raw         `
+    -ErrorAction Stop `
+    -ScriptBlock {
 
             # function Throw-ParseError { param($m) Write-Error $m; throw $m }
 
