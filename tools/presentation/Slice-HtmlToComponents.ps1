@@ -1,11 +1,13 @@
 
 param(
     [Parameter(Mandatory = $false)]
-    [string]$Url = "http://rssbplatform.dev.local/about-habitat",
+    [string]$itemPath = "/sitecore/content/Zont/Habitat/Home",
 
     [Parameter(Mandatory = $false)]
-    [string]$ItemPath = "/sitecore/content/Zont/Habitat/Home/target"
+    [string]$Url = "http://rssbplatform.dev.local/"
 )
+
+[bool]$diag = $false
 
 #------------------------------------------------------------
 # 1. Determine script folder (so we can write files relative to it)
@@ -25,7 +27,7 @@ if (-not (Test-Path $layoutScript)) {
     exit 1
 }
 
-Write-Host "Invoking Get-Layout.ps1 for item path '$ItemPath' ..."
+#  Write-Host "Invoking Get-Layout.ps1 for item path '$ItemPath' ..."
 try {
     $layoutJsonRaw = & $layoutScript -itemPath $ItemPath 2>&1
 } catch {
@@ -64,7 +66,10 @@ function Traverse-Layout {
                 $uidStr = ($rend.uid.Trim('{','}')).ToLower()
                 $layoutMap[$uidStr] = $shortKey
             } else {
-                Write-Warning "Skipping rendering with no UID in layout JSON."
+
+                if ($diag) {
+                    Write-Warning "Skipping rendering with no UID in layout JSON."
+                }
             }
 
             if ($rend.placeholders -and $rend.placeholders.Count -gt 0) {
@@ -87,8 +92,11 @@ Write-Host "Downloading HTML from $Url ..."
 try {
     $response = Invoke-WebRequest -Uri $Url -UseBasicParsing -ErrorAction Stop
 } catch {
-    Write-Error "Failed to download URL '$Url'. $_"
-    exit 1
+    if($diag){
+        Write-Error "Failed to download URL '$Url'. $_"
+        exit 1
+    }
+    exit 0
 }
 $html = $response.Content
 if (-not $html) {
@@ -158,11 +166,18 @@ foreach ($m in $matchesEnd) {
 
 $markers = $markers | Sort-Object Index
 
-Write-Host "`nFound the following markers in the HTML:`n"
-foreach ($mark in $markers) {
-    Write-Host ("  {0,-5} | UID={1} | Index={2}" -f $mark.Type, $mark.UID, $mark.Index)
+if($diag)   {
+    Write-Host "Found $($markers.Count) component markers in the HTML."
+    Write-Host "Start markers: $($matchesStart.Count), End markers: $($matchesEnd.Count)"
+
+    Write-Host "`nFound the following markers in the HTML:`n"
+    foreach ($mark in $markers) {
+        Write-Host ("  {0,-5} | UID={1} | Name={2} | Index={3}" -f $mark.Type, $mark.UID, $mark.Name, $mark.Index)
+
+    }
+    Write-Host ""
 }
-Write-Host ""
+
 
 #------------------------------------------------------------
 # 6. Build a nested “component tree” by using a stack
@@ -226,7 +241,7 @@ if ($stack.Count -gt 0) {
     exit 1
 }
 
-if ($components.Count -ne 1) {
+if ($diag -and $components.Count -ne 1) {
     Write-Warning "Expected exactly one top-level component (the holding view), but found $($components.Count). Proceeding with the first one."
 }
 $root = $components[0]
@@ -248,7 +263,7 @@ foreach ($node in $allNodes) {
     if ($node.UID -eq "00000000-0000-0000-0000-000000000000") {
         continue
     }
-    if (-not $layoutMap.ContainsKey($node.UID)) {
+    if (-not $layoutMap.ContainsKey($node.UID) -and $diag) {
         Write-Warning "Layout JSON mismatch: UID '$($node.UID)' (component '$($node.Name)') not found in layout map. That component will be skipped."
         $node.PlaceholderKey = ""
     } else {
@@ -291,6 +306,10 @@ function Write-ComponentTsx {
     if (-not (Test-Path $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
+
+    if (-not (Test-Path $fullPath)) {
+        
+    
 
     $componentName = $node.Name -replace "\s", ""
     $writer        = [System.IO.StreamWriter]::new($fullPath, $false, [System.Text.Encoding]::UTF8)
@@ -371,11 +390,18 @@ function Write-ComponentTsx {
     $writer.WriteLine("export default $componentName;")
     $writer.Close()
 
-    Write-Host " - Generated component: $tsPath"
+    if($true){
+        Write-Host " - Generated component: $tsPath"
+    }
 
     foreach ($child in $node.Children) {
         Write-ComponentTsx -node $child -scriptDir $scriptDir
     }
+}
+# else{
+#     Write-Output "Already exists: $tsPath"
+# }
+
 }
 
 if (-not $root.Children -or $root.Children.Count -eq 0) {
@@ -447,5 +473,5 @@ const Layout = ({ layoutData, headLinks }: LayoutProps): JSX.Element => {
 export default Layout;
 "@ | Out-File -FilePath $layoutPath -Encoding utf8
 
-Write-Host " - Generated Layout.tsx in $scriptDir"
-Write-Host "`nAll components and Layout.tsx have been generated successfully." -ForegroundColor Green
+#  Write-Host " - Generated Layout.tsx in $scriptDir"
+Write-Host "All components for the  have been generated successfully.`n" -ForegroundColor Green
