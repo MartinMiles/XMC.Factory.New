@@ -27,7 +27,7 @@ catch {
     exit 1
 }
 
-Write-Output "DEBUG: Local rows count: $($rows.Count)"
+Write-Output "Renderings Identified : $($rows.Count)"
 
 # 2) Load placeholders data
 $phScript = Join-Path $PSScriptRoot "Get-PlaceholdersForRenderingsOnEntireSite.ps1"

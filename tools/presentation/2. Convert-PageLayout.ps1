@@ -1,3 +1,8 @@
+#
+# Usege: & '.\2. Convert-PageLayout.ps1' -itemPath "/sitecore/content/Zont/Habitat/Home/home" -Url "http://rssbplatform.dev.local"
+
+#
+
 param(
     [string]$itemPath, # = "/sitecore/content/Zont/Habitat/Home/About Habitat/Introduction",
     [string]$Url, #      = "http://rssbplatform.dev.local/about-habitat/introduction",
