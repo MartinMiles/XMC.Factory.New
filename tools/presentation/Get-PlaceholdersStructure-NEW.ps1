@@ -112,11 +112,13 @@ foreach ($m in $matches) {
       $root = $node
     }
 
-    if ($current.placeholders.ContainsKey($origPh)) {
-      $current.placeholders[$origPh] += $node
-    }
-    else {
-      $current.placeholders[$origPh] = @($node)
+    if (-not ([string]::IsNullOrEmpty($origPh))) {
+      if ($current.placeholders.ContainsKey($origPh)) {
+        $current.placeholders[$origPh] += $node
+      }
+      else {
+        $current.placeholders[$origPh] = @($node)
+      }
     }
 
     $stack.Push($current)
@@ -134,6 +136,8 @@ foreach ($m in $matches) {
     $current = $stack.Pop()
   }
 }
+
+
 
 # 6) Validate no unmatched components remain
 if ($stack.Count -ne 0) {

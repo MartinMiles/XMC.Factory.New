@@ -1,3 +1,8 @@
+# TODO: Validate and de-dupe logic between:
+#   Get-Placeholders-ForSite-InRuntime.ps1
+# and
+#   Get-PlaceholdersForRenderingsOnEntireSite.ps1
+
 param(
     [Parameter(Mandatory=$false)][string]$SiteRoot = "/sitecore/content/Habitat",
     [Parameter(Mandatory=$false)][string]$Database = "old"
@@ -5,7 +10,8 @@ param(
 
 Set-Location -Path $PSScriptRoot
 
-# 1) Load renderings data from JSON script
+
+# 0) Load renderings data from JSON script
 $renderingsScript = Join-Path $PSScriptRoot "Get-RenderingsForSite-REMOTING.ps1"
 if (-not (Test-Path $renderingsScript)) {
     Write-Error "Renderings script not found at '$renderingsScript'"
@@ -29,7 +35,41 @@ catch {
 
 Write-Output "Renderings Identified : $($rows.Count)"
 
-# 2) Load placeholders data
+
+# 1) Load placeholder hierarchy JSON obtained in runtime
+$renderingsScript = Join-Path $PSScriptRoot "Get-Placeholders-ForSite-InRuntime.ps1"
+if (-not (Test-Path $renderingsScript)) {
+    Write-Error "Renderings script not found at '$renderingsScript'"
+    exit 1
+}
+
+$rawLines = & $renderingsScript -SitemapUrl "http://rssbplatform.dev.local/sitemap.xml"
+if (-not $rawLines) {
+    Write-Error "Renderings script returned no output"
+    exit 1
+}
+
+$jsonText = $rawLines -join "`n"
+try {
+    $sitemapRenderings = $jsonText | ConvertFrom-Json -ErrorAction Stop
+}
+catch {
+    Write-Error "Failed to parse JSON from renderings script: $_"
+    exit 1
+}
+
+$outputArray = @{}
+foreach ($renderingID in $sitemapRenderings.PSObject.Properties.Name) {
+    $placeholders = $sitemapRenderings.$renderingID
+    if (![string]::IsNullOrWhiteSpace($placeholders)) {
+        $outputArray[$renderingID] = $placeholders
+    }
+}
+
+Write-Output "Renderings with placeholders: $($outputArray.Count)"
+
+
+# 2) Load placeholders data (can we remove this at all - ??)
 $phScript = Join-Path $PSScriptRoot "Get-PlaceholdersForRenderingsOnEntireSite.ps1"
 if (-not (Test-Path $phScript)) {
     Write-Error "Placeholder script not found at '$phScript'"
@@ -51,13 +91,18 @@ catch {
     exit 1
 }
 
+
 # 3) Build placeholders map
 $placeholderMap = @{}
 foreach ($e in $placeholdersArray) {
     if (-not $e.RenderingID) { continue }
+
     $key = $e.RenderingID.Trim('{}').ToLowerInvariant()
-    if ($key) { $placeholderMap[$key] = $e.Placeholders }
+    if ($key) {
+        $placeholderMap[$key] = $outputArray[$e.RenderingID]
+    }
 }
+
 
 # 4) Build $renderings collection
 $renderings = foreach ($r in $rows) {
@@ -78,6 +123,7 @@ $renderings = foreach ($r in $rows) {
 }
 
 Write-Output "DEBUG: Built renderings count: $($renderings.Count)"
+
 
 # 5) Load and validate config
 $configFile = Join-Path $PSScriptRoot "../remoting/config.LOCAL.json"
@@ -110,6 +156,7 @@ catch {
     Write-Error "Failed to establish SPE session: $($_.Exception.Message)"
     exit 1
 }
+
 
 # 7) Define remote script block that uses $Using:renderings
 $remoteScript = {
@@ -144,9 +191,8 @@ $remoteScript = {
     foreach ($r in $renderingsLocal) {
         try {
             $raw   = $r.OriginalPath
-            Write-Output "DEBUG: Processing path '$raw'"
+            Write-Output "Processing path '$raw'"
             $parts = $raw.TrimStart('/').Split('/')
-            Write-Output "DEBUG: Segment count = $($parts.Length)"
             if ($parts.Length -lt 6) {
                 Write-Warning "Skipping path (too few segments): '$raw'"
                 continue
@@ -214,11 +260,54 @@ $remoteScript = {
             $item['Enable Datasource Query'] = '1'
             $item.Editing.EndEdit()
 
-            # set placeholders
+            function Get-PlaceholderGuid {
+                param(
+                    [string] $PlaceholderKey
+                )
+
+                $db = [Sitecore.Configuration.Factory]::GetDatabase("master")
+                if (-not $db) { throw "ERROR: Could not load the 'master' database." }
+
+                $fieldId    = [Sitecore.Data.ID]::Parse("{7256BDAB-1FD2-49DD-B205-CB4873D2917C}")
+                $templateId = [Sitecore.Data.ID]::Parse("{5C547D4E-7111-4995-95B0-6B561751BF2E}")
+                $rootItem = $db.GetItem("/sitecore/layout/Placeholder Settings")
+                if (-not $rootItem) { throw "ERROR: '/sitecore/layout/Placeholder Settings' not found." }
+
+                $allDesc = @($rootItem.Axes.GetDescendants())
+
+                $matches = @(
+                    $allDesc |
+                    Where-Object {
+                        $_.TemplateID -eq $templateId -and
+                        $_.Fields[$fieldId].Value -eq $PlaceholderKey
+                    }
+                )
+
+                switch ($matches.Count) {
+                    1 { return $matches[0].ID.ToString() }
+                    0 { return "" }  # or return $null if you prefer
+                    default {
+                        # Optional: log ambiguous matches, but return first
+                        return $matches[0].ID.ToString()
+                    }
+                }
+            }
+
             if ($r.LayoutServicePlaceholders) {
-                $item.Editing.BeginEdit()
-                $item.Fields[$fields.placeholders].Value = $r.LayoutServicePlaceholders
-                $item.Editing.EndEdit()
+                $guidList = @()
+
+                foreach ($ph in $r.LayoutServicePlaceholders -split "\|") {
+                    $guid = Get-PlaceholderGuid -PlaceholderKey $ph.Trim()
+                    if ($guid) {
+                        $guidList += $guid
+                    }
+                }
+
+                if ($guidList.Count -gt 0) {
+                    $item.Editing.BeginEdit()
+                    $item.Fields[$fields.placeholders].Value = $guidList -join "|"
+                    $item.Editing.EndEdit()
+                }
             }
         }
         catch {
