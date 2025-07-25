@@ -57,12 +57,6 @@ Invoke-RemoteScript -Session $session -ScriptBlock {
         ExitWithError "The item at path '$Using:ItemPath' does not exist."
     }
 
-    # 3. Check if field exists
-    $fieldDefinition = $item.Fields | Where-Object { $_.Name -eq $Using:FieldName }
-    if (-not $fieldDefinition) {
-        ExitWithError ("Field '" + $Using:FieldName +"' does not exist on item at '" + $Using:ItemPath + "'.")
-    }
-
     # 4. Set the field value inside editing context
     try {
         $item.Editing.BeginEdit()
